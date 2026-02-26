@@ -21,4 +21,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MCP server definition provider for AgentStack (HTTP, `https://agentstack.tech/mcp`).
 - API key prompt on first use and secure storage (SecretStorage).
 - Command **AgentStack: Set API Key** to update the stored API key.
-- Setting **AgentStack MCP: Base Url** for self-hosted MCP.
+- Setting **AgentStack MCP: Base Url** (optional override).
