@@ -31,6 +31,7 @@ To get an API key, see [MCP_QUICKSTART.md](MCP_QUICKSTART.md).
 
 ## Documentation
 
+- **This plugin:** [github.com/agentstacktech/vscode-plugin](https://github.com/agentstacktech/vscode-plugin)
 - **Quick Start (API key):** [MCP_QUICKSTART.md](MCP_QUICKSTART.md)
 - **Full MCP tool list:** [MCP Server Capabilities](https://github.com/agentstack/agentstack/blob/main/docs/MCP_SERVER_CAPABILITIES.md) (AgentStack repo)
 - **Plugins index (Cursor, Claude, GPT, VS Code):** [docs/plugins/README.md](https://github.com/agentstack/agentstack/blob/main/docs/plugins/README.md)
