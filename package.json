@@ -1,0 +1,62 @@
+{
+  "name": "agentstack-mcp",
+  "displayName": "AgentStack MCP",
+  "description": "AgentStack MCP server for VS Code: 8DNA hierarchical data, Rules Engine, Buffs, Payments, 60+ tools (Projects, Auth, Scheduler, Analytics, Webhooks, Notifications, Wallets).",
+  "version": "0.4.0",
+  "publisher": "AgentStack",
+  "license": "MIT",
+  "repository": "https://github.com/agentstack/agentstack",
+  "engines": {
+    "vscode": "^1.101.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "8dna",
+    "rules-engine",
+    "payments",
+    "mcp",
+    "backend",
+    "buffs",
+    "projects",
+    "ecosystem",
+    "agentstack"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "agentstack-mcp.setApiKey",
+        "title": "AgentStack: Set API Key"
+      }
+    ],
+    "configuration": {
+      "title": "AgentStack MCP",
+      "properties": {
+        "agentstack-mcp.baseUrl": {
+          "type": "string",
+          "default": "https://agentstack.tech/mcp",
+          "description": "MCP server URL (use your self-hosted URL for self-hosted MCP)."
+        }
+      }
+    },
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "agentstack",
+        "label": "AgentStack"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.101.0",
+    "typescript": "^5.9.0"
+  }
+}
