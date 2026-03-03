@@ -2,7 +2,7 @@
   "name": "agentstack-mcp",
   "displayName": "AgentStack MCP",
   "description": "AgentStack MCP server for VS Code: 8DNA hierarchical data, Rules Engine, Buffs, Payments, 60+ tools (Projects, Auth, Scheduler, Analytics, Webhooks, Notifications, Wallets).",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "publisher": "AgentStack",
   "license": "MIT",
   "repository": "https://github.com/agentstacktech/vscode-plugin",
@@ -30,6 +30,33 @@
       {
         "command": "agentstack-mcp.setApiKey",
         "title": "AgentStack: Set API Key"
+      },
+      {
+        "command": "agentstack-mcp.createProjectAndGetKey",
+        "title": "AgentStack: Create project and get API key"
+      }
+    ],
+    "chatParticipants": [
+      {
+        "id": "agentstack-mcp.agentstack",
+        "name": "agentstack",
+        "fullName": "AgentStack",
+        "description": "Backend: projects, 8DNA data, Rules Engine, Buffs, Payments, 60+ MCP tools",
+        "isSticky": true,
+        "disambiguation": [
+          {
+            "category": "agentstack",
+            "description": "The user wants to create or manage AgentStack projects, use the data store (8DNA), set up rules, buffs, payments, or call AgentStack MCP tools.",
+            "examples": [
+              "Create an AgentStack project",
+              "List my AgentStack projects",
+              "Get stats for my project",
+              "Store data in AgentStack",
+              "Set up a trial with Buffs",
+              "Call AgentStack MCP tools"
+            ]
+          }
+        ]
       }
     ],
     "configuration": {

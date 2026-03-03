@@ -7,16 +7,17 @@ JSON-based data store (8DNA: JSON+ with built-in variants, e.g. A/B tests) and s
 ## Quick Start
 
 1. **Install the extension** from the Marketplace or load the VSIX.
-2. **Enter your API key** when prompted (first time you use MCP / chat with an agent that uses AgentStack), or run **AgentStack: Set API Key** from the Command Palette.
-3. **Use in chat** — ask the agent to create projects, list projects, get stats, or use any AgentStack tool.
+2. **Get an API key** — run **AgentStack: Create project and get API key** from the Command Palette (Ctrl+Shift+P) to create an anonymous project and save the key in one step, or run **AgentStack: Set API Key** if you already have a key.
+3. **Use in chat** — ask the agent to create projects, list projects, get stats, or use any AgentStack tool. You’ll see: *AgentStack connected. 60+ tools available in chat.*
 
-To get an API key, see [MCP_QUICKSTART.md](MCP_QUICKSTART.md).
+More options (curl, dashboard) in [MCP_QUICKSTART.md](MCP_QUICKSTART.md).
 
 ## What this extension does
 
 | Feature | Description |
 |--------|-------------|
 | **MCP registration** | Registers the AgentStack MCP server (HTTP) so VS Code can connect to it. |
+| **Create project and get key** | **AgentStack: Create project and get API key** — creates an anonymous project (no account), saves the API key, and connects MCP in one step. |
 | **API key** | Prompts once for your API key and stores it securely (SecretStorage). Use **AgentStack: Set API Key** to change it. |
 
 ## AgentStack vs “just a database”

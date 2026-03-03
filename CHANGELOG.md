@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Command **AgentStack: Create project and get API key** — creates an anonymous project (no account), saves the API key, and refreshes MCP in one step. Supports both agentstack-core (JSON-RPC tools/call) and standalone MCP (POST /tools/projects.create_project_anonymous).
+- Post-save feedback: after **Set API Key** or after creating a project, the extension shows: *AgentStack connected. 60+ tools available in chat.*
+- **Chat participant @agentstack** — in VS Code Chat you can @-mention **@agentstack** to get answers with AgentStack context (when to use projects.*, 8DNA, buffs.*, payments.*, etc.). The participant injects a short “skills” context so the model knows which MCP tools to use. Requires a language model to be selected in the chat dropdown.
+
+### Changed
+
+- Prompt when no key is set now mentions the new command: "or use command: AgentStack: Create project and get API key".
+
 ## [0.4.1] - 2026-02-26
 
 ### Added
