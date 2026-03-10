@@ -41,6 +41,8 @@ From the response, copy `user_api_key` (or `api_key`) and use it in VS Code.
 
 No manual MCP config file is required — the extension registers the server for you. After saving a key, you’ll see: *AgentStack connected. 60+ tools available in chat.*
 
+**Ecosystem view:** Open the **AgentStack** sidebar (activity bar) to see connection status, a domain map (Projects, 8DNA, Rules, Buffs, Payments, Auth, RBAC, Assets, etc.), and a link to other plugins (Cursor, Claude, GPT). Click any domain to open docs. The status bar shows connection state; click it to set key or see key & project info. Run **AgentStack: Open documentation** to open the Plugins index.
+
 ## Step 3: Use in chat
 
 In VS Code chat (e.g. with Copilot agent mode) you can say:
@@ -61,5 +63,5 @@ The agent will call tools like `projects.create_project_anonymous`, `projects.ge
 
 For all 60+ tools (Auth, Payments, Projects, Scheduler, Analytics, Rules, Webhooks, Notifications, Wallets), see:
 
-- [MCP Server Capabilities](https://github.com/agentstack/agentstack/blob/main/docs/MCP_SERVER_CAPABILITIES.md) (in the AgentStack repo)
+- [MCP Server Capabilities](https://github.com/agentstacktech/AgentStack/blob/main/docs/MCP_SERVER_CAPABILITIES.md) (in the AgentStack repo)
 

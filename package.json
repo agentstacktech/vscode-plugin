@@ -2,10 +2,12 @@
   "name": "agentstack-mcp",
   "displayName": "AgentStack MCP",
   "description": "AgentStack MCP server for VS Code: 8DNA hierarchical data, Rules Engine, Buffs, Payments, 60+ tools (Projects, Auth, Scheduler, Analytics, Webhooks, Notifications, Wallets).",
-  "version": "0.4.3",
+  "version": "0.4.35",
   "publisher": "AgentStack",
   "license": "MIT",
   "repository": "https://github.com/agentstacktech/vscode-plugin",
+  "homepage": "https://agentstack.tech",
+  "bugs": "https://github.com/agentstacktech/vscode-plugin/issues",
   "engines": {
     "vscode": "^1.101.0"
   },
@@ -24,7 +26,14 @@
     "agentstack"
   ],
   "main": "./out/extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:agentstack-mcp.setApiKey",
+    "onCommand:agentstack-mcp.createProjectAndGetKey",
+    "onCommand:agentstack-mcp.showApiKeyAndProjectInfo",
+    "onView:agentstack-mcp.ecosystemView",
+    "onCommand:agentstack-mcp.openDocumentation"
+  ],
   "contributes": {
     "commands": [
       {
@@ -34,8 +43,38 @@
       {
         "command": "agentstack-mcp.createProjectAndGetKey",
         "title": "AgentStack: Create project and get API key"
+      },
+      {
+        "command": "agentstack-mcp.showApiKeyAndProjectInfo",
+        "title": "AgentStack: Show API key & project info"
+      },
+      {
+        "command": "agentstack-mcp.openDocumentation",
+        "title": "AgentStack: Open documentation"
+      },
+      {
+        "command": "agentstack-mcp.openLink",
+        "title": "AgentStack: Open link",
+        "enablement": "false"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agentstack",
+          "title": "AgentStack",
+          "icon": "$(database)"
+        }
+      ]
+    },
+    "views": {
+      "agentstack": [
+        {
+          "id": "agentstack-mcp.ecosystemView",
+          "name": "Ecosystem"
+        }
+      ]
+    },
     "chatParticipants": [
       {
         "id": "agentstack-mcp.agentstack",
@@ -43,13 +82,31 @@
         "fullName": "AgentStack",
         "description": "Backend: projects, 8DNA data, Rules Engine, Buffs, Payments, 60+ MCP tools",
         "isSticky": true,
+        "commands": [
+          {
+            "name": "listProjects",
+            "description": "List my AgentStack projects"
+          },
+          {
+            "name": "createProject",
+            "description": "Create a new project and get API key"
+          },
+          {
+            "name": "getStats",
+            "description": "Get stats for a project (add project name or ID in chat)"
+          },
+          {
+            "name": "setApiKey",
+            "description": "Open dialog to set or change AgentStack API key"
+          }
+        ],
         "disambiguation": [
           {
             "category": "agentstack",
             "description": "The user wants to create or manage AgentStack projects, use the data store (8DNA), set up rules, buffs, payments, or call AgentStack MCP tools.",
             "examples": [
-              "Create an AgentStack project",
-              "List my AgentStack projects",
+              "Create a project",
+              "List my projects",
               "Get stats for my project",
               "Store data in AgentStack",
               "Set up a trial with Buffs",
@@ -62,33 +119,104 @@
     "configuration": {
       "title": "AgentStack MCP",
       "properties": {
+        "agentstack-mcp.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "AgentStack API key. Get one via command 'AgentStack: Create project and get API key' or from agentstack.tech. If empty, the key from secure storage (Set API Key command) is used.",
+          "order": 1
+        },
         "agentstack-mcp.baseUrl": {
           "type": "string",
           "default": "https://agentstack.tech/mcp",
-          "description": "AgentStack MCP server URL."
+          "description": "MCP server base URL. Change only for self-hosted AgentStack.",
+          "order": 2
+        },
+        "agentstack-mcp.enableChatParticipant": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the @agentstack chat participant in Chat (60+ MCP tools).",
+          "order": 3
+        },
+        "agentstack-mcp.requestTimeoutSeconds": {
+          "type": "number",
+          "default": 60,
+          "description": "Request timeout in seconds for MCP/server calls (1–300).",
+          "order": 4
+        },
+        "agentstack-mcp.debugChatResponse": {
+          "type": "boolean",
+          "default": false,
+          "description": "Log chat response path (text vs stream) and first chunk types to Output → AgentStack MCP. Use for debugging garbled output.",
+          "order": 5
+        },
+        "agentstack-mcp.stripKnownArtifacts": {
+          "type": "boolean",
+          "default": true,
+          "description": "Remove known host/tool artifacts from chat output (e.g. projects.get_projects, Tool:, :202--T::Z). Set to false to see raw stream.",
+          "order": 6
         }
       }
     },
     "mcpServerDefinitionProviders": [
       {
         "id": "agentstack",
-        "label": "AgentStack"
+        "label": "AgentStack",
+        "description": "AgentStack backend: projects, 8DNA data store, Rules Engine, Buffs, Payments, Auth, Scheduler, Analytics, Webhooks, Notifications. 60+ MCP tools. Requires API key (command: AgentStack: Create project and get API key)."
+      }
+    ],
+    "chatSkills": [
+      {
+        "path": "./skills/agentstack-projects/SKILL.md",
+        "name": "agentstack-projects",
+        "description": "Create and manage AgentStack projects and API keys via MCP (projects.*). Use when the user wants to create a project, get an API key, list or inspect projects, get stats, or attach an anonymous project to an account."
+      },
+      {
+        "path": "./skills/agentstack-8dna/SKILL.md",
+        "name": "agentstack-8dna",
+        "description": "AgentStack 8DNA (JSON+): structured JSON data store with variants (e.g. A/B tests). Use when the user mentions data store, database, structured data, A/B tests, or project/user data (project.data, user.data)."
+      },
+      {
+        "path": "./skills/agentstack-buffs/SKILL.md",
+        "name": "agentstack-buffs",
+        "description": "Trials, subscriptions, and effects in AgentStack via MCP (buffs.*). Use when the user asks about trials, promos, subscriptions, applying effects, or giving N days of premium."
+      },
+      {
+        "path": "./skills/agentstack-rules/SKILL.md",
+        "name": "agentstack-rules",
+        "description": "Rules Engine: when/then automation, triggers via MCP (logic.*, rules.*). Use when the user asks for automation, triggers, event-driven logic, or \"when X do Y\"."
+      },
+      {
+        "path": "./skills/agentstack-assets/SKILL.md",
+        "name": "agentstack-assets",
+        "description": "Assets: inventory, digital goods, catalog via MCP (assets.*). Use when the user asks about inventory, in-game items, trading, or catalog."
+      },
+      {
+        "path": "./skills/agentstack-rbac/SKILL.md",
+        "name": "agentstack-rbac",
+        "description": "RBAC: roles, permissions, project membership via MCP. Use when the user asks about roles, permissions, admins, or project membership."
+      },
+      {
+        "path": "./skills/agentstack-payments/SKILL.md",
+        "name": "agentstack-payments",
+        "description": "Payments & Wallets via MCP (payments.*, wallets.*). Use when the user asks about payments, refunds, wallet balance, or transactions."
+      },
+      {
+        "path": "./skills/agentstack-auth/SKILL.md",
+        "name": "agentstack-auth",
+        "description": "Auth: login, register, profile via MCP (auth.*). Use when the user asks about login, sign in, register, or profile. For roles use RBAC skill."
       }
     ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "vsix": "npm run compile && vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.101.0",
+    "@vscode/vsce": "^2.22.0",
     "typescript": "^5.9.0"
-  },
-  "icon": "icon.png",
-  "galleryBanner": {
-    "color": "#1e3a5f",
-    "theme": "dark"
   }
 }

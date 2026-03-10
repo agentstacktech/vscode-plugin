@@ -54,7 +54,7 @@
 | MCP-сервер не появляется | Расширение установлено и включено; перезапустить VS Code. |
 | Запрос API key не появляется | Вызвать **AgentStack: Set API Key** вручную или открыть чат с агентом, который использует tools. |
 | 401 / 403 при вызове | Ключ валидный; для части операций нужна подписка. |
-| "Tool not found" | Имя tool совпадает с документацией (например, `projects.create_project_anonymous`). Список: [MCP Server Capabilities](https://github.com/agentstack/agentstack/blob/main/docs/MCP_SERVER_CAPABILITIES.md). |
+| "Tool not found" | Имя tool совпадает с документацией (например, `projects.create_project_anonymous`). Список: [MCP Server Capabilities](https://github.com/agentstacktech/AgentStack/blob/main/docs/MCP_SERVER_CAPABILITIES.md). |
 
 ---
 
@@ -64,7 +64,7 @@
 
 | Компонент | Назначение |
 |-----------|------------|
-| **Манифест** (`package.json`) | Имя, описание, MCP Server Definition Provider, команда Set API Key, настройка baseUrl. |
+| **Манифест** (`package.json`) | Имя, описание, MCP Server Definition Provider, команды Set API Key / Create project / Show API key, настройки apiKey, enableChatParticipant, requestTimeoutSeconds. |
 | **MCP provider** | Регистрирует HTTP MCP-сервер AgentStack; при старте запрашивает API key (если нет в SecretStorage) и подставляет его в заголовок `X-API-Key`. |
 | **Команда Set API Key** | Смена сохранённого API key и обновление списка MCP-серверов. |
 | **Документация** | README, MCP_QUICKSTART, этот файл. |
@@ -82,7 +82,7 @@
 - **Аналитика:** использование, метрики.
 - **API-ключи, Webhooks, уведомления, кошельки** — по мере реализации на бэкенде и в MCP.
 
-Точный список инструментов и параметры: [MCP_SERVER_CAPABILITIES](https://github.com/agentstack/agentstack/blob/main/docs/MCP_SERVER_CAPABILITIES.md) в репозитории AgentStack.
+Точный список инструментов и параметры: [MCP_SERVER_CAPABILITIES](https://github.com/agentstacktech/AgentStack/blob/main/docs/MCP_SERVER_CAPABILITIES.md) в репозитории AgentStack.
 
 ### Итог
 
