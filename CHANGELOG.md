@@ -7,12 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.4.36] - 2026-03-11
+## [0.4.37] - 2026-03-11
 
 ### Changed
 
 - Repository links updated across the plugin (README, MCP_QUICKSTART, TESTING_AND_CAPABILITIES, extension).
 - Documentation fixes.
+- GitHub doc links corrected to use `master` branch (AgentStack repo: MCP_SERVER_CAPABILITIES, plugins/README.md).
 
 ## [0.4.35] - 2026-03-10
 

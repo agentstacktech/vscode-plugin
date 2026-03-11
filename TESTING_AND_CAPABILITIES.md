@@ -54,7 +54,7 @@
 | MCP-сервер не появляется | Расширение установлено и включено; перезапустить VS Code. |
 | Запрос API key не появляется | Вызвать **AgentStack: Set API Key** вручную или открыть чат с агентом, который использует tools. |
 | 401 / 403 при вызове | Ключ валидный; для части операций нужна подписка. |
-| "Tool not found" | Имя tool совпадает с документацией (например, `projects.create_project_anonymous`). Список: [MCP Server Capabilities](https://github.com/agentstacktech/AgentStack/blob/main/docs/MCP_SERVER_CAPABILITIES.md). |
+| "Tool not found" | Имя tool совпадает с документацией (например, `projects.create_project_anonymous`). Список: [MCP Server Capabilities](https://github.com/agentstacktech/AgentStack/blob/master/docs/MCP_SERVER_CAPABILITIES.md). |
 
 ---
 
@@ -82,7 +82,7 @@
 - **Аналитика:** использование, метрики.
 - **API-ключи, Webhooks, уведомления, кошельки** — по мере реализации на бэкенде и в MCP.
 
-Точный список инструментов и параметры: [MCP_SERVER_CAPABILITIES](https://github.com/agentstacktech/AgentStack/blob/main/docs/MCP_SERVER_CAPABILITIES.md) в репозитории AgentStack.
+Точный список инструментов и параметры: [MCP_SERVER_CAPABILITIES](https://github.com/agentstacktech/AgentStack/blob/master/docs/MCP_SERVER_CAPABILITIES.md) в репозитории AgentStack.
 
 ### Итог
 

@@ -20,7 +20,7 @@ const CONNECTED_MESSAGE = "AgentStack connected. 60+ tools available in chat.";
 const OUTPUT_CHANNEL_NAME = "AgentStack MCP";
 
 /** Base URL for AgentStack docs (plugins index, MCP capabilities). */
-const DOCS_BASE = "https://github.com/agentstacktech/AgentStack/blob/main";
+const DOCS_BASE = "https://github.com/agentstacktech/AgentStack/blob/master";
 const DOCS_PLUGINS_INDEX = `${DOCS_BASE}/docs/plugins/README.md`;
 const DOCS_MCP_CAPABILITIES = `${DOCS_BASE}/docs/MCP_SERVER_CAPABILITIES.md`;
 const DOCS_DNA_KEY_VALUE = `${DOCS_BASE}/docs/architecture/DNA_KEY_VALUE_API.md`;

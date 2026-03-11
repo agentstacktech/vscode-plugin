@@ -26,7 +26,7 @@ All tools are available in **Chat** when you select the **@agentstack** particip
 | **Auth** | "Get my profile", "Quick auth with email" |
 | **Scheduler, Analytics, Webhooks, Notifications, Wallets** | "Schedule a task", "Get analytics", "List webhooks" |
 
-**Full tool list and parameters:** [MCP Server Capabilities](https://github.com/agentstacktech/AgentStack/blob/main/docs/MCP_SERVER_CAPABILITIES.md) (AgentStack repo).
+**Full tool list and parameters:** [MCP Server Capabilities](https://github.com/agentstacktech/AgentStack/blob/master/docs/MCP_SERVER_CAPABILITIES.md) (AgentStack repo).
 
 **After creating a project:** The API key is saved in the extension and used automatically. To copy it elsewhere, run **AgentStack: Set API Key** (paste the same key) or **AgentStack: Show API key & project info** (preview and copy).
 
@@ -71,8 +71,8 @@ All tools are available in **Chat** when you select the **@agentstack** particip
 
 - **This plugin:** [github.com/agentstacktech/vscode-plugin](https://github.com/agentstacktech/vscode-plugin)
 - **Quick Start (API key):** [MCP_QUICKSTART.md](MCP_QUICKSTART.md)
-- **Full MCP tool list:** [MCP Server Capabilities](https://github.com/agentstacktech/AgentStack/blob/main/docs/MCP_SERVER_CAPABILITIES.md) (AgentStack repo)
-- **Plugins index (Cursor, Claude, GPT, VS Code):** [docs/plugins/README.md](https://github.com/agentstacktech/AgentStack/blob/main/docs/plugins/README.md)
+- **Full MCP tool list:** [MCP Server Capabilities](https://github.com/agentstacktech/AgentStack/blob/master/docs/MCP_SERVER_CAPABILITIES.md) (AgentStack repo)
+- **Plugins index (Cursor, Claude, GPT, VS Code):** [docs/plugins/README.md](https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/README.md)
 
 ## Links
 
