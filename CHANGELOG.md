@@ -7,19 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.36] - 2026-03-11
+
+### Changed
+
+- Repository links updated across the plugin (README, MCP_QUICKSTART, TESTING_AND_CAPABILITIES, extension).
+- Documentation fixes.
+
+## [0.4.35] - 2026-03-10
+
 ### Added
 
 - Command **AgentStack: Create project and get API key** — creates an anonymous project (no account), saves the API key, and refreshes MCP in one step. Supports both agentstack-core (JSON-RPC tools/call) and standalone MCP (POST /tools/projects.create_project_anonymous).
 - Post-save feedback: after **Set API Key** or after creating a project, the extension shows: *AgentStack connected. 60+ tools available in chat.*
 - **Chat participant @agentstack** — in VS Code Chat you can @-mention **@agentstack** to get answers with AgentStack context (when to use projects.*, 8DNA, buffs.*, payments.*, etc.). The participant injects a short “skills” context so the model knows which MCP tools to use. Requires a language model to be selected in the chat dropdown.
-
-### Changed
-
-- Prompt when no key is set now mentions the new command: "or use command: AgentStack: Create project and get API key".
-
-## [0.4.35] - 2026-03-10
-
-### Added
 
 - **baseUrl** setting — Optional MCP server URL override for self-hosted AgentStack (default: `https://agentstack.tech/mcp`).
 - **Request timeout** — All MCP fetch calls (create project, get projects) use `requestTimeoutSeconds` (1–300 s) with `AbortController`; timeout errors reported clearly.
@@ -31,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Prompt when no key is set now mentions the new command: "or use command: AgentStack: Create project and get API key".
 - README and MCP_QUICKSTART updated with Ecosystem view, status bar, Open documentation, and chat skills. AGENTSTACK_PLUGIN_PHILOSOPHY (VS Code section) updated with new components.
 
 - **createProjectAnonymous** — Correct error message when standalone endpoint returns HTTP error; both RPC and standalone paths use timeout.
