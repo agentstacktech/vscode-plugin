@@ -1,10 +1,17 @@
 /**
  * Shared MCP client: call AgentStack tools via JSON-RPC tools/call.
- * Single layer for projects.get_projects, get_project, get_stats, get_users, update_project.
+ * Projects, assets, get_project, get_stats, get_users, update_project.
  * Errors return { error: string }; 401/403 return user-friendly messages. Caller shows UI.
  */
 
 import type {
+  ActiveBuff,
+  Asset,
+  AssetsListResponse,
+  GetBalanceResponse,
+  ListActiveBuffsResponse,
+  LogicListResponse,
+  LogicRule,
   McpError,
   ProjectFull,
   ProjectListItem,
@@ -14,7 +21,7 @@ import type {
   ProjectUsersResponse,
 } from "./types";
 
-export type { ProjectFull, ProjectListItem, ProjectStats, ProjectUser };
+export type { Asset, ProjectFull, ProjectListItem, ProjectStats, ProjectUser };
 
 const TOOLS_PATH = "/tools";
 
@@ -190,4 +197,166 @@ export async function updateProject(
   const raw = await callMcpTool<ProjectFull>(opts, "projects.update_project", args);
   if ("error" in raw) return raw;
   return raw;
+}
+
+/** List assets in project (assets.list). */
+export async function fetchAssetsList(
+  opts: McpClientOptions,
+  projectId: number,
+  params?: { type?: string; limit?: number; offset?: number }
+): Promise<AssetsListResponse | McpError> {
+  const args: Record<string, unknown> = { project_id: projectId };
+  if (params?.type !== undefined) args.type = params.type;
+  if (params?.limit !== undefined) args.limit = params.limit;
+  if (params?.offset !== undefined) args.offset = params.offset;
+  const raw = await callMcpTool<{ assets?: unknown[]; total?: number; limit?: number; offset?: number }>(
+    opts,
+    "assets.list",
+    args
+  );
+  if ("error" in raw) return raw;
+  const assets = Array.isArray(raw.assets) ? raw.assets : [];
+  return {
+    assets: assets as Asset[],
+    total: typeof raw.total === "number" ? raw.total : assets.length,
+    limit: typeof raw.limit === "number" ? raw.limit : params?.limit ?? 100,
+    offset: typeof raw.offset === "number" ? raw.offset : params?.offset ?? 0,
+  };
+}
+
+/** Get single asset by ID (assets.get). */
+export async function fetchAsset(
+  opts: McpClientOptions,
+  projectId: number,
+  assetId: string
+): Promise<Asset | McpError> {
+  const raw = await callMcpTool<Asset>(opts, "assets.get", {
+    project_id: projectId,
+    asset_id: assetId,
+  });
+  if ("error" in raw) return raw;
+  return raw;
+}
+
+/** Create asset (assets.create). */
+export async function createAsset(
+  opts: McpClientOptions,
+  projectId: number,
+  body: { name: string; type: string; price_usdt?: string; components?: Record<string, unknown> }
+): Promise<Asset | McpError> {
+  const raw = await callMcpTool<Asset>(opts, "assets.create", {
+    project_id: projectId,
+    name: body.name,
+    type: body.type,
+    price_usdt: body.price_usdt ?? "0.00",
+    components: body.components ?? {},
+  });
+  if ("error" in raw) return raw;
+  return raw;
+}
+
+/** Update asset (assets.update). */
+export async function updateAsset(
+  opts: McpClientOptions,
+  projectId: number,
+  assetId: string,
+  body: { name?: string; type?: string; price_usdt?: string; components?: Record<string, unknown> }
+): Promise<Asset | McpError> {
+  const args: Record<string, unknown> = { project_id: projectId, asset_id: assetId };
+  if (body.name !== undefined) args.name = body.name;
+  if (body.type !== undefined) args.type = body.type;
+  if (body.price_usdt !== undefined) args.price_usdt = body.price_usdt;
+  if (body.components !== undefined) args.components = body.components;
+  const raw = await callMcpTool<Asset>(opts, "assets.update", args);
+  if ("error" in raw) return raw;
+  return raw;
+}
+
+/** List active buffs (buffs.list_active_buffs). Use entity_kind "project" and entity_id = projectId for project-level buffs. */
+export async function listActiveBuffs(
+  opts: McpClientOptions,
+  params: {
+    entity_id: number;
+    entity_kind: "user" | "project";
+    project_id?: number;
+    category?: string;
+  }
+): Promise<ListActiveBuffsResponse | McpError> {
+  const args: Record<string, unknown> = {
+    entity_id: params.entity_id,
+    entity_kind: params.entity_kind,
+  };
+  if (params.project_id !== undefined) args.project_id = params.project_id;
+  if (params.category !== undefined) args.category = params.category;
+  const raw = await callMcpTool<{ active_buffs?: unknown[]; entity_id?: number; entity_kind?: string }>(
+    opts,
+    "buffs.list_active_buffs",
+    args
+  );
+  if ("error" in raw) return raw;
+  const buffs = Array.isArray(raw.active_buffs) ? raw.active_buffs : [];
+  return {
+    active_buffs: buffs as ActiveBuff[],
+    entity_id: raw.entity_id,
+    entity_kind: raw.entity_kind,
+  };
+}
+
+/** Apply buff (buffs.apply_buff). */
+export async function applyBuff(
+  opts: McpClientOptions,
+  params: {
+    buff_id: string;
+    entity_id: number;
+    entity_kind: "user" | "project";
+    project_id?: number;
+  }
+): Promise<{ buff_id?: string; state?: string; applied_at?: string; expires_at?: string } | McpError> {
+  const args: Record<string, unknown> = {
+    buff_id: params.buff_id,
+    entity_id: params.entity_id,
+    entity_kind: params.entity_kind,
+  };
+  if (params.project_id !== undefined) args.project_id = params.project_id;
+  return callMcpTool(opts, "buffs.apply_buff", args);
+}
+
+/** Get wallet balance (payments.get_balance). */
+export async function getBalance(
+  opts: McpClientOptions,
+  projectId?: number
+): Promise<GetBalanceResponse | McpError> {
+  const args: Record<string, unknown> = {};
+  if (projectId !== undefined) args.project_id = projectId;
+  return callMcpTool<GetBalanceResponse>(opts, "payments.get_balance", args);
+}
+
+/** List logic rules (logic.list). Pass projectId to scope by project (_project_id). */
+export async function logicList(
+  opts: McpClientOptions,
+  projectId?: number,
+  params?: { enabled?: boolean; limit?: number; offset?: number; name?: string; search?: string }
+): Promise<LogicListResponse | McpError> {
+  const args: Record<string, unknown> = {};
+  if (projectId !== undefined) args._project_id = projectId;
+  if (params?.enabled !== undefined) args.enabled = params.enabled;
+  if (params?.limit !== undefined) args.limit = params.limit;
+  if (params?.offset !== undefined) args.offset = params.offset;
+  if (params?.name !== undefined) args.name = params.name;
+  if (params?.search !== undefined) args.search = params.search;
+  const raw = await callMcpTool<{ logic?: unknown[]; count?: number }>(opts, "logic.list", args);
+  if ("error" in raw) return raw;
+  const logic = Array.isArray(raw.logic) ? raw.logic : [];
+  return {
+    logic: logic as LogicRule[],
+    count: typeof raw.count === "number" ? raw.count : logic.length,
+  };
+}
+
+/** Get single logic rule (logic.get). */
+export async function logicGet(
+  opts: McpClientOptions,
+  ruleId: string
+): Promise<LogicRule | McpError> {
+  return callMcpTool<LogicRule>(opts, "logic.get", { logic_id: ruleId });
 }

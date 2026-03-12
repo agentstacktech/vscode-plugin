@@ -65,3 +65,67 @@ export interface ProjectUsersResponse {
   users?: ProjectUser[];
   count?: number;
 }
+
+/** Asset (assets.get, assets.list item). */
+export interface Asset {
+  id?: string;
+  name?: string;
+  type?: string;
+  price_usdt?: string;
+  project_id?: number;
+  components?: Record<string, unknown>;
+  created_at?: string;
+  [key: string]: unknown;
+}
+
+/** Response from assets.list. */
+export interface AssetsListResponse {
+  assets?: Asset[];
+  total?: number;
+  limit?: number;
+  offset?: number;
+}
+
+/** Active buff (buffs.list_active_buffs item). */
+export interface ActiveBuff {
+  buff_id?: string;
+  name?: string;
+  state?: string;
+  expires_at?: string;
+  category?: string;
+  [key: string]: unknown;
+}
+
+/** Response from buffs.list_active_buffs. */
+export interface ListActiveBuffsResponse {
+  active_buffs?: ActiveBuff[];
+  entity_id?: number;
+  entity_kind?: string;
+}
+
+/** Response from payments.get_balance. */
+export interface GetBalanceResponse {
+  balance?: number;
+  currency?: string;
+  project_id?: number;
+  updated_at?: string;
+}
+
+/** Logic rule (logic.list item or logic.get). */
+export interface LogicRule {
+  id?: string;
+  name?: string;
+  description?: string;
+  enabled?: boolean;
+  priority?: number;
+  triggers?: unknown[];
+  schedulers?: unknown[];
+  space?: unknown[];
+  [key: string]: unknown;
+}
+
+/** Response from logic.list. */
+export interface LogicListResponse {
+  logic?: LogicRule[];
+  count?: number;
+}

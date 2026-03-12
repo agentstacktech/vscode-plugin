@@ -18,7 +18,7 @@ All tools are available in **Chat** when you select the **@agentstack** particip
 
 | Domain | Example prompts in chat |
 |--------|-------------------------|
-| **Projects** | "List my projects", "Get stats for my project", "Create a project named Test" |
+| **Projects** | **List my AgentStack projects**, **Get stats for a project**, **List users in the selected project** (slash commands) — the extension fetches real data from the API directly. Or say "list my projects", "get stats", "list users", "project details" / "список проектов", "статистика", "пользователи проекта". For other requests (e.g. "Create a project named Test") the model uses MCP tools; responses use only tool data, never invented examples. |
 | **8DNA / Data** | "Store project data at key config.theme", "Read user data" |
 | **Rules Engine** | "Create a rule when user signs up", "List logic rules" |
 | **Buffs** | "Give user a 7-day trial", "List active buffs" |
@@ -59,7 +59,7 @@ All tools are available in **Chat** when you select the **@agentstack** particip
 - **Base URL** — MCP server URL (default: `https://agentstack.tech/mcp`). Change only for self-hosted AgentStack.
 - **Request timeout** — Timeout for MCP/server calls in seconds (1–300, default 60).
 - **Enable Chat Participant** — Turn @agentstack chat on/off.
-- **Debug / Strip artifacts** — Toggle if chat output looks wrong (e.g. raw tool names in the answer).
+- **Debug / Strip artifacts** — Toggle if chat output looks wrong (e.g. raw tool names in the answer). Enable **Debug Chat Response** and check **Output → AgentStack MCP** to see whether the response came from the direct API path or from the model (helps diagnose fake/example project lists).
 
 ## If something doesn't work
 

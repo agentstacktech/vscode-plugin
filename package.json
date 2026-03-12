@@ -2,7 +2,7 @@
   "name": "agentstack-mcp",
   "displayName": "AgentStack MCP",
   "description": "AgentStack MCP server for VS Code: 8DNA hierarchical data, Rules Engine, Buffs, Payments, 60+ tools (Projects, Auth, Scheduler, Analytics, Webhooks, Notifications, Wallets).",
-  "version": "0.4.42",
+  "version": "0.4.44",
   "publisher": "AgentStack",
   "license": "MIT",
   "repository": "https://github.com/agentstacktech/vscode-plugin",
@@ -43,7 +43,14 @@
     "onCommand:agentstack-mcp.showUserInEditor",
     "onCommand:agentstack-mcp.saveProjectSettingsFromEditor",
     "onCommand:agentstack-mcp.unselectProject",
-    "onCommand:agentstack-mcp.copyProjectId"
+    "onCommand:agentstack-mcp.copyProjectId",
+    "onCommand:agentstack-mcp.editProjectDataInEditor",
+    "onCommand:agentstack-mcp.saveProjectDataFromEditor",
+    "onCommand:agentstack-mcp.listAssets",
+    "onCommand:agentstack-mcp.listActiveBuffs",
+    "onCommand:agentstack-mcp.listRules",
+    "onCommand:agentstack-mcp.showWalletBalance",
+    "onCommand:agentstack-mcp.listCurrencies"
   ],
   "contributes": {
     "commands": [
@@ -78,6 +85,34 @@
       {
         "command": "agentstack-mcp.showProjectDataInEditor",
         "title": "AgentStack: Show project data in editor"
+      },
+      {
+        "command": "agentstack-mcp.editProjectDataInEditor",
+        "title": "AgentStack: Edit project data in editor"
+      },
+      {
+        "command": "agentstack-mcp.saveProjectDataFromEditor",
+        "title": "AgentStack: Save project data from editor"
+      },
+      {
+        "command": "agentstack-mcp.listAssets",
+        "title": "AgentStack: List assets"
+      },
+      {
+        "command": "agentstack-mcp.listActiveBuffs",
+        "title": "AgentStack: List active buffs"
+      },
+      {
+        "command": "agentstack-mcp.listRules",
+        "title": "AgentStack: List rules"
+      },
+      {
+        "command": "agentstack-mcp.showWalletBalance",
+        "title": "AgentStack: Show ecosystem wallet balance"
+      },
+      {
+        "command": "agentstack-mcp.listCurrencies",
+        "title": "AgentStack: List project currencies"
       },
       {
         "command": "agentstack-mcp.openProjectSettingsInEditor",
@@ -121,6 +156,14 @@
         {
           "command": "agentstack-mcp.showProjectDataInEditor",
           "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-project"
+        },
+        {
+          "command": "agentstack-mcp.editProjectDataInEditor",
+          "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-data"
+        },
+        {
+          "command": "agentstack-mcp.saveProjectDataFromEditor",
+          "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-data"
         },
         {
           "command": "agentstack-mcp.setApiKey",
@@ -195,7 +238,11 @@
           },
           {
             "name": "getStats",
-            "description": "Get stats for a project (add project name or ID in chat)"
+            "description": "Get stats for a project (uses selected project or first project)"
+          },
+          {
+            "name": "listUsers",
+            "description": "List users in the selected project"
           },
           {
             "name": "setApiKey",
@@ -205,11 +252,12 @@
         "disambiguation": [
           {
             "category": "agentstack",
-            "description": "The user wants to create or manage AgentStack projects, use the data store (8DNA), set up rules, buffs, payments, or call AgentStack MCP tools.",
+            "description": "The user wants to create or manage AgentStack projects, list users or stats, use the data store (8DNA), set up rules, buffs, payments, or call AgentStack MCP tools.",
             "examples": [
               "Create a project",
               "List my projects",
               "Get stats for my project",
+              "List users in the project",
               "Store data in AgentStack",
               "Set up a trial with Buffs",
               "Call AgentStack MCP tools"

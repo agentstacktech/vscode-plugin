@@ -22,6 +22,12 @@ const DOCS_DNA_KEY_VALUE = `${DOCS_BASE}/docs/architecture/DNA_KEY_VALUE_API.md`
 export const SELECTED_PROJECT_KEY = "agentstack.selectedProjectId";
 export const SELECTED_PROJECT_NAME_KEY = "agentstack.selectedProjectName";
 
+/** Exclude placeholder/demo projects (e.g. proj_1). Real API returns numeric ids. */
+function isPlaceholderProject(p: ProjectListItem): boolean {
+  const id = p.project_id ?? p.id;
+  return typeof id === "string" && /^proj_\d+$/.test(id);
+}
+
 /** Tree node with optional payload for getChildren. */
 export class EcosystemNode extends vscode.TreeItem {
   constructor(
@@ -179,7 +185,8 @@ export class EcosystemTreeDataProvider implements vscode.TreeDataProvider<Ecosys
         err.command = { command: "agentstack-mcp.refreshEcosystem", title: "Retry" };
         return [refreshNode, createNode, err];
       }
-      const projectNodes = result.projects.map((p: ProjectListItem) => {
+      const realProjects = result.projects.filter((p) => !isPlaceholderProject(p));
+      const projectNodes = realProjects.map((p: ProjectListItem) => {
         const id = p.project_id ?? p.id ?? 0;
         const name = p.name ?? "Unnamed";
         const node = new EcosystemNode(`${name} (${id})`, "project", vscode.TreeItemCollapsibleState.None, {
@@ -269,18 +276,30 @@ export class EcosystemTreeDataProvider implements vscode.TreeDataProvider<Ecosys
       return [summary, data, users, settings, capabilities, unselect];
     }
 
-    // Capabilities: Buffs, Payments, Rules, 8DNA (links to docs + Chat hint)
+    // Capabilities: Assets (List assets), Buffs, Payments, Rules, 8DNA (links to docs + Chat hint)
     if (element.nodeKind === "capabilities" && element.projectId !== undefined) {
-      const items: Array<{ label: string; link: string; icon: string }> = [
-        { label: "Buffs", link: DOCS_MCP_CAPABILITIES, icon: "gift" },
-        { label: "Payments / Wallets", link: DOCS_MCP_CAPABILITIES, icon: "credit-card" },
-        { label: "Rules", link: DOCS_MCP_CAPABILITIES, icon: "symbol-event" },
+      const items: Array<{ label: string; link?: string; icon: string; command?: string; commandTitle?: string; commandArgs?: unknown[] }> = [
+        { label: "Assets", icon: "package", command: "agentstack-mcp.listAssets", commandTitle: "List assets", commandArgs: [element.projectId] },
+        { label: "Buffs", icon: "gift", command: "agentstack-mcp.listActiveBuffs", commandTitle: "List active buffs", commandArgs: [element.projectId] },
+        { label: "Payments / Wallets", icon: "credit-card", command: "agentstack-mcp.showWalletBalance", commandTitle: "Show ecosystem wallet balance", commandArgs: [element.projectId] },
+        { label: "Rules", icon: "symbol-event", command: "agentstack-mcp.listRules", commandTitle: "List rules", commandArgs: [element.projectId] },
         { label: "8DNA (data)", link: DOCS_DNA_KEY_VALUE, icon: "database" },
       ];
       return items.map((item) => {
         const node = new EcosystemNode(item.label, "capability", vscode.TreeItemCollapsibleState.None, { link: item.link });
-        node.tooltip = `Open docs. Use @agentstack in Chat for more (e.g. list buffs, get balance).`;
-        node.command = { command: "agentstack-mcp.openLink", title: "Open", arguments: [item.link] };
+        if (item.command) {
+          const tooltips: Record<string, string> = {
+            "Assets": "List project assets (cards, currencies, items). Use Chat: list currencies for in-app currencies only.",
+            "Buffs": "List active buffs. Use @agentstack in Chat to apply or manage buffs.",
+            "Payments / Wallets": "Ecosystem wallet balance (real money). For in-app currencies use Assets or Chat: list currencies.",
+            "Rules": "List logic rules. Use @agentstack in Chat to create or update rules.",
+          };
+          node.tooltip = tooltips[item.label] ?? "Use @agentstack in Chat for more.";
+          node.command = { command: item.command, title: item.commandTitle ?? "Open", arguments: item.commandArgs ?? [] };
+        } else {
+          node.tooltip = `Open docs. Use @agentstack in Chat for more (e.g. list buffs, get balance).`;
+          node.command = { command: "agentstack-mcp.openLink", title: "Open", arguments: [item.link!] };
+        }
         node.iconPath = new vscode.ThemeIcon(item.icon);
         return node;
       });

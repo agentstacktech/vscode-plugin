@@ -5,7 +5,7 @@ import {
   SELECTED_PROJECT_KEY,
   SELECTED_PROJECT_NAME_KEY,
 } from "./ecosystemTree";
-import { fetchProjects, fetchProject, fetchProjectUsers, updateProject } from "./mcpClient";
+import { fetchProjects, fetchProject, fetchProjectStats, fetchProjectUsers, fetchAssetsList, updateProject, listActiveBuffs, getBalance, logicList } from "./mcpClient";
 import type { McpClientOptions } from "./mcpClient";
 
 /** Proposed VS Code API (chat, lm, MCP) — not yet in @types/vscode. Cast used only where needed. */
@@ -62,11 +62,14 @@ const AGENTSTACK_SKILLS_CONTEXT = `You are the AgentStack expert. AgentStack is 
 - Store or read data (database-like) → 8DNA: project.data, user.data; use commands.execute or project API
 - Rules / automation → logic.*, rules.*
 - Trials, subscriptions, effects → buffs.create_buff, buffs.apply_buff, buffs.list_active_buffs
-- Payments → payments.*, wallets.*
+- Payments → payments.*, wallets.* (ecosystem wallet = real money; use payments.get_balance). In-app/project currencies = assets with type "currency" (assets.list with type filter).
 - Auth → auth.get_profile, auth.quick_auth
 - Scheduler, analytics, webhooks, notifications → scheduler.*, analytics.*, webhooks.*, notifications.*
-When listing projects: reply only in natural language. Use a short bullet or numbered list: one line per project with name, ID, and one line of stats (e.g. "X requests, Y active buffs"). Do not output JSON, field names alone, or raw tool output. If the tool returns no data (e.g. no projects, empty list), say so clearly (e.g. "You have no projects yet") and do not invent or generate example data.
-CRITICAL: Your reply is shown directly to the user. Do not output your planning, reasoning, or step-by-step thoughts. Reply only with the final answer to the user. Use natural language in full sentences. You MAY use Markdown for readability: **bold**, bullet or numbered lists, line breaks. Do NOT include: tool names (e.g. projects_projects or projects.get_projects), "call ..." with a tool name, JSON, payloads, curly braces, or raw field lists (e.g. ". name ... ID ... :202--"). Do not output truncated dates or field labels alone. Format lists with Markdown bullets or numbers.`;
+WRITE OPERATIONS (must use MCP only; reply = only tool result): Creating/updating assets → assets.create, assets.update. Applying buffs → buffs.apply_buff. Adding/removing users or changing roles → use projects.add_user, projects.remove_user, projects.update_user_role when available. Updating project or user data → projects.update_project (field data), commands.execute. Creating/updating/deleting rules → logic.create, logic.update, logic.delete. Payments/refunds → payments.create, payments.refund. For any of these: perform the operation ONLY by calling the corresponding MCP tool; in your reply show ONLY the result of that call (success, error message, or returned data). Do not invent or show example outcomes.
+DATA RULE (all tools): For EVERY AgentStack tool response (projects, stats, users, buffs, payments, auth, rules, 8DNA, etc.) use ONLY the exact data returned by the tool. Never invent, fabricate, or use example/placeholder data. If a tool returns empty, an error, or no items, say so clearly (e.g. "You have no projects yet", "No active buffs", "Stats could not be loaded"); do not substitute example or demo data. Real IDs from AgentStack are numeric (project_id, user_id); never use placeholder IDs like proj_1, proj_2, user_123, or example names like "Demo Project" or "Analytics App".
+When listing projects: reply only in natural language. Use a short bullet or numbered list: one line per project with name, ID, and one line of stats (e.g. "X requests, Y active buffs"). Do not output JSON, field names alone, or raw tool output.
+CHAT CONTEXT: For "list users", "get my users", "project users", "list assets", "list rules", "get balance", etc., the plugin may have already resolved the project (selected or first in list). If the user asks for users/assets/rules/stats and you have project_id in context, use it directly; do not say "no projects found" if the plugin or a previous step already provided project context.
+CRITICAL: Your reply is shown directly to the user. Do not output your planning, reasoning, or step-by-step thoughts. Reply only with the final answer to the user. Use natural language in full sentences. You MAY use Markdown for readability: **bold**, bullet or numbered lists, line breaks. Do NOT include: tool names (e.g. projects_projects or projects.get_projects), "call ..." with a tool name, JSON, payloads, curly braces, or raw field lists. Do not output truncated dates or field labels alone. Format lists with Markdown bullets or numbers.`;
 
 /** Decode binary chunk as UTF-8 or UTF-16 (if BOM present); avoids wrong encoding if host sent bytes. */
 function decodeStreamBytes(value: ArrayBufferView | ArrayBuffer): string {
@@ -102,6 +105,33 @@ async function getMcpOptions(context: vscode.ExtensionContext): Promise<McpClien
     apiKey: apiKey.trim(),
     timeoutMs: getRequestTimeoutMs(),
   };
+}
+
+/** Resolve project for chat: use selected project or first project from API. Returns projectId + optional hint that first was used. */
+async function resolveProjectForChat(
+  opts: McpClientOptions,
+  selectedProjectId: number | undefined,
+  selectedProjectName: string | undefined
+): Promise<
+  | { projectId: number; projectName: string | undefined; usedFirstInList: false }
+  | { projectId: number; projectName: string | undefined; usedFirstInList: true }
+  | { projectId: undefined; projectName: undefined; usedFirstInList: false }
+> {
+  if (selectedProjectId !== undefined) {
+    return { projectId: selectedProjectId, projectName: selectedProjectName, usedFirstInList: false };
+  }
+  const projResult = await fetchProjects(opts);
+  if ("error" in projResult) {
+    return { projectId: undefined, projectName: undefined, usedFirstInList: false };
+  }
+  const first = projResult.projects.filter((p) => !isPlaceholderProject(p))[0];
+  const rawId = first?.project_id ?? first?.id;
+  const projectId = typeof rawId === "number" ? rawId : undefined;
+  const projectName = first?.name;
+  if (projectId === undefined) {
+    return { projectId: undefined, projectName: undefined, usedFirstInList: false };
+  }
+  return { projectId, projectName, usedFirstInList: true };
 }
 
 /** Fetch with timeout; throws on timeout or non-ok. */
@@ -218,13 +248,20 @@ async function createProjectAnonymous(baseUrl: string, projectName: string): Pro
 }
 
 
-/** Format projects list as markdown for chat. */
+/** Exclude placeholder/demo projects (e.g. proj_1, from model hallucination). Real API returns numeric ids. */
+function isPlaceholderProject(p: { id?: unknown; project_id?: unknown }): boolean {
+  const id = p.project_id ?? p.id;
+  return typeof id === "string" && /^proj_\d+$/.test(id);
+}
+
+/** Format projects list as markdown for chat. Uses only real data; filters out placeholder projects. */
 function formatProjectsList(
   projects: Array<{ id?: number; project_id?: number; name?: string; stats?: { requests?: number }; active_buffs?: number; [key: string]: unknown }>,
   count: number
 ): string {
-  if (projects.length === 0) return "You have no projects yet. Create one with **AgentStack: Create project and get API key** or ask me to create a project.";
-  const lines = projects.map((p, i) => {
+  const real = projects.filter((p) => !isPlaceholderProject(p));
+  if (real.length === 0) return "You have no projects yet. Create one with **AgentStack: Create project and get API key** or ask me to create a project.";
+  const lines = real.map((p, i) => {
     const id = p.project_id ?? p.id ?? "—";
     const name = p.name ?? "Unnamed";
     const stats = p.stats as { requests?: number } | undefined;
@@ -232,7 +269,120 @@ function formatProjectsList(
     const buffs = (p as { active_buffs?: number }).active_buffs ?? (p.stats as { active_buffs?: number } | undefined)?.active_buffs ?? 0;
     return `${i + 1}. **${name}** — ID: ${id}, ${requests} requests, ${buffs} active buff(s).`;
   });
-  return `You have ${count} project(s):\n\n${lines.join("\n")}`;
+  return `You have ${real.length} project(s):\n\n${lines.join("\n")}`;
+}
+
+/** Format project stats for chat. Uses only real API data. */
+function formatProjectStats(
+  projectId: number,
+  projectName: string | undefined,
+  stats: { requests?: number; active_buffs?: number; users?: number; [key: string]: unknown }
+): string {
+  const requests = typeof stats.requests === "number" ? stats.requests : "—";
+  const buffs = typeof stats.active_buffs === "number" ? stats.active_buffs : 0;
+  const users = typeof stats.users === "number" ? stats.users : "—";
+  const name = projectName ? `**${projectName}**` : `Project ${projectId}`;
+  return `${name} (ID: ${projectId})\n\n- Requests: ${requests}\n- Active buffs: ${buffs}\n- Users: ${users}`;
+}
+
+/** Format project users list for chat. Uses only real API data. */
+function formatProjectUsers(
+  projectId: number,
+  users: Array<{ user_id?: number; id?: number; email?: string; role?: string; [key: string]: unknown }>,
+  count: number
+): string {
+  if (users.length === 0) return `No users in project ${projectId}. Add users via the project dashboard or API.`;
+  const lines = users.map((u, i) => {
+    const id = u.user_id ?? u.id ?? "—";
+    const email = u.email ?? "—";
+    const role = u.role ?? "—";
+    return `${i + 1}. ${email} — ID: ${id}, role: ${role}`;
+  });
+  return `Project ${projectId} — ${count} user(s):\n\n${lines.join("\n")}`;
+}
+
+/** Format single project details for chat. Uses only real API data. */
+function formatProjectDetails(project: { id?: number; project_id?: number; name?: string; description?: string; is_active?: boolean; created_at?: string; [key: string]: unknown }): string {
+  const id = project.project_id ?? project.id ?? "—";
+  const name = project.name ?? "Unnamed";
+  const desc = project.description ? `\n${project.description}` : "";
+  const active = project.is_active !== false ? "active" : "inactive";
+  const created = project.created_at ? `\nCreated: ${project.created_at}` : "";
+  return `**${name}** (ID: ${id}) — ${active}${desc}${created}`;
+}
+
+/** Format assets list for chat. Uses only real API data. */
+function formatAssetsList(
+  assets: Array<{ id?: string; name?: string; type?: string; price_usdt?: string; [key: string]: unknown }>,
+  total: number
+): string {
+  if (assets.length === 0) return "No assets in this project. Create assets with **AgentStack: List assets** (then use Chat to create via assets.create) or add them in the dashboard.";
+  const lines = assets.map((a, i) => {
+    const id = a.id ?? "—";
+    const name = a.name ?? "Unnamed";
+    const type = a.type ?? "—";
+    const price = a.price_usdt ?? "—";
+    return `${i + 1}. **${name}** — ID: ${id}, type: ${type}, price: ${price} USDT`;
+  });
+  return `Project has ${total} asset(s):\n\n${lines.join("\n")}`;
+}
+
+/** Format active buffs list for chat. */
+function formatBuffsList(
+  buffs: Array<{ buff_id?: string; name?: string; state?: string; expires_at?: string; category?: string; [key: string]: unknown }>,
+  entityKind: string,
+  entityId: number
+): string {
+  if (buffs.length === 0) return `No active buffs for ${entityKind} ${entityId}. Use Chat to apply buffs (e.g. \`buffs.apply_buff\`) or create them in the dashboard.`;
+  const lines = buffs.map((b, i) => {
+    const id = b.buff_id ?? "—";
+    const name = b.name ?? "Unnamed";
+    const state = b.state ?? "—";
+    const expires = b.expires_at ?? "—";
+    const cat = b.category ?? "";
+    return `${i + 1}. **${name}** — ID: ${id}, state: ${state}${cat ? `, category: ${cat}` : ""}, expires: ${expires}`;
+  });
+  return `Active buffs for ${entityKind} ${entityId} (${buffs.length}):\n\n${lines.join("\n")}`;
+}
+
+/** Format ecosystem wallet balance for chat (real money). */
+function formatBalance(balance: number | undefined, currency: string | undefined, projectId: number | undefined, updatedAt: string | undefined): string {
+  const b = typeof balance === "number" ? balance : 0;
+  const c = currency ?? "USD";
+  const proj = projectId !== undefined ? ` (project ${projectId})` : "";
+  const updated = updatedAt ? ` — updated ${updatedAt}` : "";
+  return `**Ecosystem wallet balance**${proj} (real money): **${b} ${c}**${updated}\n\n_For in-app / project currencies use: list assets or "list currencies" in Chat._`;
+}
+
+/** Format project currencies list for chat (in-app assets, not real money). */
+function formatProjectCurrencies(
+  assets: Array<{ id?: string; name?: string; type?: string; price_usdt?: string; components?: Record<string, unknown>; [key: string]: unknown }>,
+  total: number
+): string {
+  if (assets.length === 0) return "No project currencies defined. Create assets with type **currency** (AgentStack: List assets, then in Chat use `assets.create` with type: \"currency\").";
+  const lines = assets.map((a, i) => {
+    const id = a.id ?? "—";
+    const name = a.name ?? "Unnamed";
+    const price = a.price_usdt ?? "—";
+    return `${i + 1}. **${name}** — ID: ${id}, price: ${price} USDT`;
+  });
+  return `**Project currencies** (in-app, not real money) — ${total} item(s):\n\n${lines.join("\n")}\n\n_Ecosystem wallet (real money): use "get balance" or "wallet balance" in Chat._`;
+}
+
+/** Format logic rules list for chat. */
+function formatRulesList(
+  rules: Array<{ id?: string; name?: string; enabled?: boolean; priority?: number; [key: string]: unknown }>,
+  count: number
+): string {
+  if (rules.length === 0) return "No rules in this project. Use Chat to create rules (e.g. `logic.create`) or add them in the dashboard.";
+  const lines = rules.map((r, i) => {
+    const id = r.id ?? "—";
+    const name = r.name ?? "Unnamed";
+    const enabled = r.enabled === true ? "enabled" : "disabled";
+    const pri = r.priority ?? "—";
+    return `${i + 1}. **${name}** — ID: ${id}, ${enabled}, priority: ${pri}`;
+  });
+  return `Project has ${count} rule(s):\n\n${lines.join("\n")}`;
 }
 
 let chatParticipantRegistered = false;
@@ -251,7 +401,11 @@ function looksLikeMcpToolResultJson(str: string): boolean {
     trimmed.includes('"projects"') ||
     trimmed.includes('"success"') ||
     (trimmed.includes('"data"') && trimmed.includes('"error"')) ||
-    (trimmed.includes('"type"') && trimmed.includes('"tool"') && trimmed.includes('"request"'))
+    (trimmed.includes('"type"') && trimmed.includes('"tool"') && trimmed.includes('"request"')) ||
+    (trimmed.includes('"users"') && (trimmed.includes('"count"') || trimmed.includes('"user_id"') || trimmed.includes('"role"'))) ||
+    (trimmed.includes('"active_buffs"') || trimmed.includes('"buffs"')) ||
+    (trimmed.includes('"stats"') && (trimmed.includes('"requests"') || trimmed.includes('"project_id"'))) ||
+    (trimmed.includes('"result"') && trimmed.includes('"content"'))
   );
 }
 
@@ -263,9 +417,16 @@ function stripKnownArtifactsFromResponse(str: string): string {
     ["projects.get_projects", ""],
     ["Calling AgentStack to list projects...Tool:", ""],
     ["Calling AgentStack to list your projects.", ""],
+    ["Initiating to list user's projects.", ""],
+    ["The tool response is needed.", ""],
     ["Arguments: {}", ""],
     ["{\"name\":\"\",\"type\":\"tool\",\"request\":{}}", ""],
+    ["{\"id\":\"\",\"json\":{}}", ""],
     ["Tool:.get", ""],
+    ["projects.get_stats", ""],
+    ["projects.get_project", ""],
+    ["buffs.list_active_buffs", ""],
+    ["auth.get_profile", ""],
     ["will your now", ""],
     ["={}={}", ""],
     ["{\"\":\"\",\"\":", ""],
@@ -313,6 +474,7 @@ function registerChatParticipant(context: vscode.ExtensionContext): boolean {
     listProjects: "List my AgentStack projects",
     createProject: "Create a new project and get API key",
     getStats: "Get stats for a project",
+    listUsers: "List users in the selected project",
     setApiKey: "",
   };
   const handler: vscode.ChatRequestHandler = async (request, _context, stream, token) => {
@@ -334,6 +496,8 @@ function registerChatParticipant(context: vscode.ExtensionContext): boolean {
     const isListProjectsRequest =
       command === "listProjects" ||
       /list\s+(my\s+)?projects?/i.test(userPrompt.trim()) ||
+      /(get|show)\s+(my\s+)?projects?/i.test(userPrompt.trim()) ||
+      /\bmy\s+projects?\b/i.test(userPrompt.trim()) ||
       /список\s+проектов/i.test(userPrompt.trim());
 
     if (isListProjectsRequest) {
@@ -349,6 +513,243 @@ function registerChatParticipant(context: vscode.ExtensionContext): boolean {
         return;
       }
       stream.markdown(formatProjectsList(result.projects, result.count ?? result.projects.length));
+      return;
+    }
+
+    const selectedProjectId =
+      context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY) ??
+      context.globalState.get<number | undefined>("agentstack.lastProjectId");
+    const selectedProjectName = context.globalState.get<string | undefined>(SELECTED_PROJECT_NAME_KEY);
+
+    const isGetStatsRequest =
+      command === "getStats" ||
+      /(get|show|project\s+)?stats?/i.test(userPrompt.trim()) ||
+      /статистик|запросы|requests|active\s+buffs?/i.test(userPrompt.trim());
+
+    if (isGetStatsRequest) {
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        stream.markdown("Set your AgentStack API key first: **AgentStack: Set API Key** or **AgentStack: Create project and get API key**.");
+        return;
+      }
+      const resolved = await resolveProjectForChat(opts, selectedProjectId, selectedProjectName);
+      if (resolved.projectId === undefined) {
+        stream.markdown("No project selected. Select a project in the **AgentStack** sidebar (Ecosystem → Projects → click a project), or create one with **AgentStack: Create project and get API key**.");
+        return;
+      }
+      if (resolved.usedFirstInList) {
+        stream.markdown(`Using project **${resolved.projectName ?? "ID " + resolved.projectId}** (ID: ${resolved.projectId}) — first in list. Select in **AgentStack** sidebar to change.\n\n`);
+      }
+      stream.progress("Fetching project stats…");
+      const result = await fetchProjectStats(opts, resolved.projectId);
+      if ("error" in result) {
+        stream.markdown(`Could not load stats: ${result.error}.`);
+        return;
+      }
+      stream.markdown(formatProjectStats(resolved.projectId, resolved.projectName ?? undefined, result));
+      return;
+    }
+
+    const isListUsersRequest =
+      command === "listUsers" ||
+      /(get|show|list|fetch|retrieve|display)\s+(my\s+)?(project\s+)?users?/i.test(userPrompt.trim()) ||
+      /list\s+(project\s+)?users?|users?\s+(in\s+)?(project|this)/i.test(userPrompt.trim()) ||
+      /\b(my\s+users?|project\s+users?|users?\s+(in|of)\s+(my\s+)?(this\s+)?project)/i.test(userPrompt.trim()) ||
+      /\bwho\s+are\s+(the\s+)?(project\s+)?users?/i.test(userPrompt.trim()) ||
+      /список\s+пользователей|пользователи\s+(проекта|в\s+проекте)/i.test(userPrompt.trim());
+
+    if (isListUsersRequest) {
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        stream.markdown("Set your AgentStack API key first: **AgentStack: Set API Key** or **AgentStack: Create project and get API key**.");
+        return;
+      }
+      const resolved = await resolveProjectForChat(opts, selectedProjectId, selectedProjectName);
+      if (resolved.projectId === undefined) {
+        stream.markdown("No project selected. Select a project in the **AgentStack** sidebar (Ecosystem → Projects → click a project), or create one with **AgentStack: Create project and get API key**.");
+        return;
+      }
+      if (resolved.usedFirstInList) {
+        stream.markdown(`Using project **${resolved.projectName ?? "ID " + resolved.projectId}** (ID: ${resolved.projectId}) — first in list. Select in **AgentStack** sidebar to change.\n\n`);
+      }
+      stream.progress("Fetching project users…");
+      const result = await fetchProjectUsers(opts, resolved.projectId);
+      if ("error" in result) {
+        stream.markdown(`Could not load users: ${result.error}.`);
+        return;
+      }
+      stream.markdown(formatProjectUsers(resolved.projectId, result.users ?? [], result.count ?? (result.users?.length ?? 0)));
+      return;
+    }
+
+    const isGetProjectDetailsRequest =
+      /(show|get|project)\s+(details?|info|information)/i.test(userPrompt.trim()) ||
+      /(details?|info)\s+for\s+(my\s+)?project/i.test(userPrompt.trim()) ||
+      /информация\s+о\s+проекте|детали\s+проекта|проект\s+подробн/i.test(userPrompt.trim());
+
+    if (isGetProjectDetailsRequest) {
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        stream.markdown("Set your AgentStack API key first: **AgentStack: Set API Key** or **AgentStack: Create project and get API key**.");
+        return;
+      }
+      const resolved = await resolveProjectForChat(opts, selectedProjectId, selectedProjectName);
+      if (resolved.projectId === undefined) {
+        stream.markdown("No project selected. Select a project in the **AgentStack** sidebar or create one with **AgentStack: Create project and get API key**.");
+        return;
+      }
+      if (resolved.usedFirstInList) {
+        stream.markdown(`Using project **${resolved.projectName ?? "ID " + resolved.projectId}** (ID: ${resolved.projectId}) — first in list. Select in **AgentStack** sidebar to change.\n\n`);
+      }
+      stream.progress("Fetching project details…");
+      const result = await fetchProject(opts, resolved.projectId);
+      if ("error" in result) {
+        stream.markdown(`Could not load project: ${result.error}.`);
+        return;
+      }
+      stream.markdown(formatProjectDetails(result));
+      return;
+    }
+
+    const isListAssetsRequest =
+      /list\s+assets?|assets?\s+(list|каталог|inventory)/i.test(userPrompt.trim()) ||
+      /список\s+ассетов?|каталог|inventory|мои\s+ассеты?/i.test(userPrompt.trim());
+
+    if (isListAssetsRequest) {
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        stream.markdown("Set your AgentStack API key first: **AgentStack: Set API Key** or **AgentStack: Create project and get API key**.");
+        return;
+      }
+      const resolved = await resolveProjectForChat(opts, selectedProjectId, selectedProjectName);
+      if (resolved.projectId === undefined) {
+        stream.markdown("No project selected. Select a project in the **AgentStack** sidebar or create one with **AgentStack: Create project and get API key**.");
+        return;
+      }
+      if (resolved.usedFirstInList) {
+        stream.markdown(`Using project **${resolved.projectName ?? "ID " + resolved.projectId}** (ID: ${resolved.projectId}) — first in list. Select in **AgentStack** sidebar to change.\n\n`);
+      }
+      stream.progress("Fetching assets…");
+      const result = await fetchAssetsList(opts, resolved.projectId);
+      if ("error" in result) {
+        stream.markdown(`Could not load assets: ${result.error}.`);
+        return;
+      }
+      stream.markdown(formatAssetsList(result.assets ?? [], result.total ?? 0));
+      return;
+    }
+
+    const isListBuffsRequest =
+      /list\s+buffs?|active\s+buffs?|buffs?\s+(list|active)/i.test(userPrompt.trim()) ||
+      /список\s+баффов?|активные\s+баффы?/i.test(userPrompt.trim());
+
+    if (isListBuffsRequest) {
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        stream.markdown("Set your AgentStack API key first: **AgentStack: Set API Key** or **AgentStack: Create project and get API key**.");
+        return;
+      }
+      const resolved = await resolveProjectForChat(opts, selectedProjectId, selectedProjectName);
+      if (resolved.projectId === undefined) {
+        stream.markdown("No project selected. Select a project in the **AgentStack** sidebar or create one with **AgentStack: Create project and get API key**.");
+        return;
+      }
+      if (resolved.usedFirstInList) {
+        stream.markdown(`Using project **${resolved.projectName ?? "ID " + resolved.projectId}** (ID: ${resolved.projectId}) — first in list. Select in **AgentStack** sidebar to change.\n\n`);
+      }
+      stream.progress("Fetching active buffs…");
+      const result = await listActiveBuffs(opts, {
+        entity_id: resolved.projectId,
+        entity_kind: "project",
+        project_id: resolved.projectId,
+      });
+      if ("error" in result) {
+        stream.markdown(`Could not load active buffs: ${result.error}.`);
+        return;
+      }
+      stream.markdown(formatBuffsList(
+        result.active_buffs ?? [],
+        result.entity_kind ?? "project",
+        result.entity_id ?? resolved.projectId
+      ));
+      return;
+    }
+
+    const isBalanceRequest =
+      /get\s+(ecosystem\s+)?(wallet\s+)?balance|(ecosystem\s+)?wallet\s+balance|(real\s+)?(money\s+)?balance|баланс\s+кошелька|мои\s+монеты?|ecosystem\s+balance|^баланс$/im.test(userPrompt.trim()) ||
+      /\b(wallet\s+balance|my\s+balance|check\s+balance)\b|^balance$/im.test(userPrompt.trim());
+
+    if (isBalanceRequest) {
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        stream.markdown("Set your AgentStack API key first: **AgentStack: Set API Key** or **AgentStack: Create project and get API key**.");
+        return;
+      }
+      const resolved = await resolveProjectForChat(opts, selectedProjectId, selectedProjectName);
+      if (resolved.usedFirstInList && resolved.projectId !== undefined) {
+        stream.markdown(`Using project **${resolved.projectName ?? "ID " + resolved.projectId}** (ID: ${resolved.projectId}) — first in list. Select in **AgentStack** sidebar to change.\n\n`);
+      }
+      stream.progress("Fetching ecosystem wallet balance…");
+      const result = await getBalance(opts, resolved.projectId);
+      if ("error" in result) {
+        stream.markdown(`Could not load wallet balance: ${result.error}.`);
+        return;
+      }
+      stream.markdown(formatBalance(result.balance, result.currency, result.project_id, result.updated_at));
+      return;
+    }
+
+    const isListCurrenciesRequest =
+      /list\s+(project\s+)?currencies?|project\s+currencies?|in-?game\s+currencies?|custom\s+currencies?|список\s+валют|кастомные\s+валюты|валюты\s+проекта/i.test(userPrompt.trim());
+
+    if (isListCurrenciesRequest) {
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        stream.markdown("Set your AgentStack API key first: **AgentStack: Set API Key** or **AgentStack: Create project and get API key**.");
+        return;
+      }
+      const resolved = await resolveProjectForChat(opts, selectedProjectId, selectedProjectName);
+      if (resolved.projectId === undefined) {
+        stream.markdown("No project selected. Select a project in the **AgentStack** sidebar or create one with **AgentStack: Create project and get API key**.");
+        return;
+      }
+      if (resolved.usedFirstInList) {
+        stream.markdown(`Using project **${resolved.projectName ?? "ID " + resolved.projectId}** (ID: ${resolved.projectId}) — first in list. Select in **AgentStack** sidebar to change.\n\n`);
+      }
+      stream.progress("Fetching project currencies…");
+      const result = await fetchAssetsList(opts, resolved.projectId, { type: "currency" });
+      if ("error" in result) {
+        stream.markdown(`Could not load project currencies: ${result.error}.`);
+        return;
+      }
+      stream.markdown(formatProjectCurrencies(result.assets ?? [], result.total ?? 0));
+      return;
+    }
+
+    const isListRulesRequest =
+      /list\s+rules?|rules?\s+list|список\s+правил?/i.test(userPrompt.trim());
+
+    if (isListRulesRequest) {
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        stream.markdown("Set your AgentStack API key first: **AgentStack: Set API Key** or **AgentStack: Create project and get API key**.");
+        return;
+      }
+      const resolved = await resolveProjectForChat(opts, selectedProjectId, selectedProjectName);
+      if (resolved.projectId === undefined) {
+        stream.markdown("No project selected. Select a project in the **AgentStack** sidebar or create one with **AgentStack: Create project and get API key**.");
+        return;
+      }
+      if (resolved.usedFirstInList) {
+        stream.markdown(`Using project **${resolved.projectName ?? "ID " + resolved.projectId}** (ID: ${resolved.projectId}) — first in list. Select in **AgentStack** sidebar to change.\n\n`);
+      }
+      stream.progress("Fetching rules…");
+      const result = await logicList(opts, resolved.projectId);
+      if ("error" in result) {
+        stream.markdown(`Could not load rules: ${result.error}.`);
+        return;
+      }
+      stream.markdown(formatRulesList(result.logic ?? [], result.count ?? 0));
       return;
     }
 
@@ -370,7 +771,7 @@ function registerChatParticipant(context: vscode.ExtensionContext): boolean {
       apiKey && apiKey.trim() !== ""
         ? "The user's AgentStack API key is already set. Use the available MCP tools to fulfill the request (e.g. list projects, get stats). Respond with the actual results or a short confirmation, not with instructions to set the key."
         : "The user has not set an API key yet. Suggest they run \"AgentStack: Create project and get API key\" or \"AgentStack: Set API Key\".";
-    const userContent = `${AGENTSTACK_SKILLS_CONTEXT}\n\n${keyStatus}\n\nUser request: ${userPrompt}`;
+    const userContent = `${AGENTSTACK_SKILLS_CONTEXT}\n\n${keyStatus}\n\nIMPORTANT: For projects, users, stats, or any other data — use ONLY the exact response from the MCP tool you call. Never invent, fabricate, or show example data. If a tool returns empty or error, say so; do not substitute fake results. Distinguish: (1) Ecosystem wallet balance = real money, use payments.get_balance. (2) Project/in-app currencies = assets with type \"currency\", use assets.list with type filter. For write operations (create/update asset, apply buff, add/remove user, update role, update project/user data, create/update/delete rule, payment/refund): perform them only by calling the corresponding MCP tool and show the user only the result of that call (success, error, or returned data).\n\nUser request: ${userPrompt}`;
     const messages = [vscode.LanguageModelChatMessage.User(userContent)];
     try {
       const response = await model.sendRequest(messages, {}, token);
@@ -560,6 +961,205 @@ function activateInner(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.listAssets", async (projectIdArg?: number) => {
+      let projectId = typeof projectIdArg === "number" ? projectIdArg : context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY) ?? context.globalState.get<number | undefined>("agentstack.lastProjectId");
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        void vscode.window.showErrorMessage("Set API key first (AgentStack: Set API Key).");
+        return;
+      }
+      if (projectId === undefined) {
+        const projResult = await fetchProjects(opts);
+        if ("error" in projResult) {
+          void vscode.window.showErrorMessage(`AgentStack: ${projResult.error}`);
+          return;
+        }
+        const first = projResult.projects.filter((p) => !isPlaceholderProject(p))[0];
+        const rawId = first?.project_id ?? first?.id;
+        projectId = typeof rawId === "number" ? rawId : undefined;
+      }
+      if (projectId === undefined) {
+        void vscode.window.showErrorMessage("No project selected. Select a project in the AgentStack sidebar or create one first.");
+        return;
+      }
+      const result = await fetchAssetsList(opts, projectId);
+      if ("error" in result) {
+        void vscode.window.showErrorMessage(`AgentStack: ${result.error}`);
+        return;
+      }
+      const doc = await vscode.workspace.openTextDocument({
+        content: JSON.stringify({ assets: result.assets, total: result.total, limit: result.limit, offset: result.offset }, null, 2),
+        language: "json",
+      });
+      void vscode.window.showTextDocument(doc, { preview: false });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.listActiveBuffs", async (projectIdArg?: number) => {
+      let projectId = typeof projectIdArg === "number" ? projectIdArg : context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY) ?? context.globalState.get<number | undefined>("agentstack.lastProjectId");
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        void vscode.window.showErrorMessage("Set API key first (AgentStack: Set API Key).");
+        return;
+      }
+      if (projectId === undefined) {
+        const projResult = await fetchProjects(opts);
+        if ("error" in projResult) {
+          void vscode.window.showErrorMessage(`AgentStack: ${projResult.error}`);
+          return;
+        }
+        const first = projResult.projects.filter((p) => !isPlaceholderProject(p))[0];
+        const rawId = first?.project_id ?? first?.id;
+        projectId = typeof rawId === "number" ? rawId : undefined;
+      }
+      if (projectId === undefined) {
+        void vscode.window.showErrorMessage("No project selected. Select a project in the AgentStack sidebar or create one first.");
+        return;
+      }
+      const result = await listActiveBuffs(opts, {
+        entity_id: projectId,
+        entity_kind: "project",
+        project_id: projectId,
+      });
+      if ("error" in result) {
+        void vscode.window.showErrorMessage(`AgentStack: ${result.error}`);
+        return;
+      }
+      const doc = await vscode.workspace.openTextDocument({
+        content: JSON.stringify(
+          { active_buffs: result.active_buffs, entity_id: result.entity_id, entity_kind: result.entity_kind },
+          null,
+          2
+        ),
+        language: "json",
+      });
+      void vscode.window.showTextDocument(doc, { preview: false });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.listRules", async (projectIdArg?: number) => {
+      let projectId = typeof projectIdArg === "number" ? projectIdArg : context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY) ?? context.globalState.get<number | undefined>("agentstack.lastProjectId");
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        void vscode.window.showErrorMessage("Set API key first (AgentStack: Set API Key).");
+        return;
+      }
+      if (projectId === undefined) {
+        const projResult = await fetchProjects(opts);
+        if ("error" in projResult) {
+          void vscode.window.showErrorMessage(`AgentStack: ${projResult.error}`);
+          return;
+        }
+        const first = projResult.projects.filter((p) => !isPlaceholderProject(p))[0];
+        const rawId = first?.project_id ?? first?.id;
+        projectId = typeof rawId === "number" ? rawId : undefined;
+      }
+      if (projectId === undefined) {
+        void vscode.window.showErrorMessage("No project selected. Select a project in the AgentStack sidebar or create one first.");
+        return;
+      }
+      const result = await logicList(opts, projectId);
+      if ("error" in result) {
+        void vscode.window.showErrorMessage(`AgentStack: ${result.error}`);
+        return;
+      }
+      const doc = await vscode.workspace.openTextDocument({
+        content: JSON.stringify({ logic: result.logic, count: result.count }, null, 2),
+        language: "json",
+      });
+      void vscode.window.showTextDocument(doc, { preview: false });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.showWalletBalance", async (projectIdArg?: number) => {
+      let projectId = typeof projectIdArg === "number" ? projectIdArg : context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY) ?? context.globalState.get<number | undefined>("agentstack.lastProjectId");
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        void vscode.window.showErrorMessage("Set API key first (AgentStack: Set API Key).");
+        return;
+      }
+      if (projectId === undefined) {
+        const projResult = await fetchProjects(opts);
+        if ("error" in projResult) {
+          void vscode.window.showErrorMessage(`AgentStack: ${projResult.error}`);
+          return;
+        }
+        const first = projResult.projects.filter((p) => !isPlaceholderProject(p))[0];
+        const rawId = first?.project_id ?? first?.id;
+        projectId = typeof rawId === "number" ? rawId : undefined;
+      }
+      const result = await getBalance(opts, projectId);
+      if ("error" in result) {
+        void vscode.window.showErrorMessage(`AgentStack: ${result.error}`);
+        return;
+      }
+      const doc = await vscode.workspace.openTextDocument({
+        content: JSON.stringify(
+          {
+            _comment: "Ecosystem wallet balance (real money). For in-app currencies use: List project currencies or List assets.",
+            balance: result.balance,
+            currency: result.currency,
+            project_id: result.project_id,
+            updated_at: result.updated_at,
+          },
+          null,
+          2
+        ),
+        language: "json",
+      });
+      void vscode.window.showTextDocument(doc, { preview: false });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.listCurrencies", async (projectIdArg?: number) => {
+      let projectId = typeof projectIdArg === "number" ? projectIdArg : context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY) ?? context.globalState.get<number | undefined>("agentstack.lastProjectId");
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        void vscode.window.showErrorMessage("Set API key first (AgentStack: Set API Key).");
+        return;
+      }
+      if (projectId === undefined) {
+        const projResult = await fetchProjects(opts);
+        if ("error" in projResult) {
+          void vscode.window.showErrorMessage(`AgentStack: ${projResult.error}`);
+          return;
+        }
+        const first = projResult.projects.filter((p) => !isPlaceholderProject(p))[0];
+        const rawId = first?.project_id ?? first?.id;
+        projectId = typeof rawId === "number" ? rawId : undefined;
+      }
+      if (projectId === undefined) {
+        void vscode.window.showErrorMessage("No project selected. Select a project in the AgentStack sidebar or create one first.");
+        return;
+      }
+      const result = await fetchAssetsList(opts, projectId, { type: "currency" });
+      if ("error" in result) {
+        void vscode.window.showErrorMessage(`AgentStack: ${result.error}`);
+        return;
+      }
+      const doc = await vscode.workspace.openTextDocument({
+        content: JSON.stringify(
+          {
+            _comment: "Project currencies (in-app assets, not real money). Ecosystem wallet: use Show wallet balance or Chat 'get balance'.",
+            assets: result.assets,
+            total: result.total,
+            limit: result.limit,
+            offset: result.offset,
+          },
+          null,
+          2
+        ),
+        language: "json",
+      });
+      void vscode.window.showTextDocument(doc, { preview: false });
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand("agentstack-mcp.showProjectDataInEditor", async (projectIdArg?: number) => {
       const projectId = typeof projectIdArg === "number" ? projectIdArg : context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY);
       if (projectId === undefined) return;
@@ -637,6 +1237,67 @@ function activateInner(context: vscode.ExtensionContext): void {
       }
       ecosystemProvider.refresh();
       void vscode.window.showInformationMessage("Project settings saved.");
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.editProjectDataInEditor", async (projectIdArg?: number) => {
+      const projectId = typeof projectIdArg === "number" ? projectIdArg : context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY);
+      if (projectId === undefined) {
+        void vscode.window.showErrorMessage("Select a project first (Ecosystem → Projects → click a project).");
+        return;
+      }
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        void vscode.window.showErrorMessage("Set API key first (AgentStack: Set API Key).");
+        return;
+      }
+      const result = await fetchProject(opts, projectId);
+      if ("error" in result) {
+        void vscode.window.showErrorMessage(`AgentStack: ${result.error}`);
+        return;
+      }
+      const projectData = (result as { data?: Record<string, unknown> }).data ?? {};
+      const doc = await vscode.workspace.openTextDocument({
+        content: JSON.stringify(projectData, null, 2),
+        language: "json",
+      });
+      void vscode.window.showTextDocument(doc, { preview: false });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.saveProjectDataFromEditor", async () => {
+      const projectId = context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY);
+      if (projectId === undefined) {
+        void vscode.window.showErrorMessage("Select a project first (Ecosystem → Projects → click a project).");
+        return;
+      }
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        void vscode.window.showErrorMessage("Open the project data JSON in the editor (AgentStack: Edit project data in editor), then run this command.");
+        return;
+      }
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(editor.document.getText()) as Record<string, unknown>;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        void vscode.window.showErrorMessage(`Invalid JSON: ${msg}`);
+        return;
+      }
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        void vscode.window.showErrorMessage("Set API key first (AgentStack: Set API Key).");
+        return;
+      }
+      const result = await updateProject(opts, projectId, { data });
+      if ("error" in result) {
+        void vscode.window.showErrorMessage(`AgentStack: ${result.error}`);
+        return;
+      }
+      ecosystemProvider.refresh();
+      void vscode.window.showInformationMessage("Project data saved.");
     })
   );
 
@@ -842,10 +1503,9 @@ function activateInner(context: vscode.ExtensionContext): void {
             await vscode.workspace.getConfiguration("agentstack-mcp").update("apiKey", result.user_api_key, vscode.ConfigurationTarget.Global);
             didChangeEmitter.fire();
             const parts = [
-              result.project_id !== undefined ? `Project created (ID: ${result.project_id}).` : "Project created.",
-              "API key saved and used for MCP automatically.",
-              "To use 60+ tools: open Chat, select **@agentstack**, then ask (e.g. \"List my projects\", \"Get project stats\").",
-              "To copy the key: **AgentStack: Show API key & project info**.",
+              result.project_id !== undefined ? `Project created and selected (ID: ${result.project_id}).` : "Project created.",
+              "API key saved. In Chat with **@agentstack** try: \"List my users\", \"List assets\", \"Get stats\", \"Get balance\".",
+              "Sidebar: **AgentStack** → select project → Capabilities for assets, buffs, rules, wallet.",
             ];
             void vscode.window.showInformationMessage(parts.join(" "));
           } else {

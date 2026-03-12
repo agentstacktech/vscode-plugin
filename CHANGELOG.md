@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.44] - 2026-03-11
+
+### Added
+
+- **Ecosystem data workflow in plugin** — Full support for viewing and managing ecosystem data from the plugin: **Edit project data** in editor with save via `updateProject`; **Assets** (list/create/update) via mcpClient, chat direct paths ("list assets", "list currencies"), commands **List assets** / **List project currencies**, and Capabilities → Assets in tree; **Buffs** (list active, apply) with chat paths and **List active buffs** command; **Ecosystem wallet balance** (real money) and **project currencies** (in-app assets) clearly separated — commands **Show ecosystem wallet balance** / **List project currencies**, chat "get balance" / "list currencies"; **Rules** (logic.list, logic.get) with **List rules** command and Capabilities → Rules. Payments/Wallets in tree now runs **Show ecosystem wallet balance**.
+- **Project context in chat** — When no project is selected, the plugin uses the first project from the API and shows: "Using project **Name** (ID: X) — first in list. Select in **AgentStack** sidebar to change." so developers always know which project is used.
+- **resolveProjectForChat** — Single helper for resolving project (selected or first) used by all chat direct paths (stats, users, details, assets, buffs, balance, currencies, rules).
+
+### Changed
+
+- **Chat: list users** — Broader phrase detection so "get my users", "project users", "fetch users", "users in project" etc. always hit the direct API path (no model); fixes "no projects found" when the user has projects.
+- **Create project** success message — Now suggests: "In Chat with @agentstack try: List my users, List assets, Get stats, Get balance" and "Sidebar: AgentStack → select project → Capabilities".
+- **Prompts** — WRITE OPERATIONS and ecosystem vs project currencies (real money vs assets type=currency) documented in skills context; CHAT CONTEXT added so the model uses project context when the plugin has already resolved it.
+
+### Fixed
+
+- **Get my users** — Requests like "get my users" or "my users" now correctly trigger the direct path and return users for the selected or first project instead of the model replying "no projects found".
+
+## [0.4.43] - 2026-03-11
+
+### Added
+
+- **Chat: direct API for projects, stats, users, project details** — When you ask @agentstack to list projects, get stats, list users, or show project details, the extension now calls the AgentStack API directly and shows only real data (no model in the loop for these queries). Use slash commands **List my AgentStack projects**, **Get stats for a project**, **List users in the selected project**, or phrases like "list my projects", "get stats", "list users", "project details".
+- **List project users** slash command in chat participant.
+
+### Changed
+
+- **Chat: no invented data** — System prompt and per-request reminder instruct the model to use ONLY tool response data for any domain (projects, users, stats, buffs, etc.). Placeholder or example data (e.g. "Demo Project", "proj_1") is forbidden.
+- **Chat output** — Raw MCP tool JSON and host artifacts (e.g. "Initiating to list user's projects.", "The tool response is needed.") are filtered from stream; more response shapes (users, buffs, stats) are detected and hidden so only natural-language reply is shown.
+- **Projects list** — Placeholder projects (e.g. string id `proj_1`) are filtered out in chat formatting and in the Ecosystem tree so only real API projects are shown.
+
 ## [0.4.42] - 2026-03-11
 
 ### Added
