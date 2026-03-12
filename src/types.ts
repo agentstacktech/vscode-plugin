@@ -111,6 +111,27 @@ export interface GetBalanceResponse {
   updated_at?: string;
 }
 
+/** Transaction item (payments.list_transactions). */
+export interface PaymentTransaction {
+  payment_id?: string;
+  status?: string;
+  amount?: number;
+  currency?: string;
+  description?: string;
+  payment_method?: string;
+  created_at?: string;
+  updated_at?: string;
+  completed_at?: string;
+  [key: string]: unknown;
+}
+
+/** Response from payments.list_transactions. */
+export interface ListTransactionsResponse {
+  transactions?: PaymentTransaction[];
+  count?: number;
+  project_id?: number;
+}
+
 /** Logic rule (logic.list item or logic.get). */
 export interface LogicRule {
   id?: string;
@@ -128,4 +149,23 @@ export interface LogicRule {
 export interface LogicListResponse {
   logic?: LogicRule[];
   count?: number;
+}
+
+/** Profile from auth.get_profile (user card: email, name, role, etc.). */
+export interface GetProfileResponse {
+  user_id?: number;
+  email?: string;
+  username?: string;
+  display_name?: string;
+  first_name?: string;
+  last_name?: string;
+  role?: string;
+  avatar?: string;
+  locale?: string;
+  timezone?: string;
+  created_at?: string;
+  updated_at?: string;
+  is_active?: boolean;
+  last_login?: string;
+  [key: string]: unknown;
 }

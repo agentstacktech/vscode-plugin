@@ -9,10 +9,13 @@ import type {
   Asset,
   AssetsListResponse,
   GetBalanceResponse,
+  GetProfileResponse,
   ListActiveBuffsResponse,
+  ListTransactionsResponse,
   LogicListResponse,
   LogicRule,
   McpError,
+  PaymentTransaction,
   ProjectFull,
   ProjectListItem,
   ProjectsResponse,
@@ -329,6 +332,41 @@ export async function getBalance(
   const args: Record<string, unknown> = {};
   if (projectId !== undefined) args.project_id = projectId;
   return callMcpTool<GetBalanceResponse>(opts, "payments.get_balance", args);
+}
+
+/** List payment transactions (payments.list_transactions). */
+export async function listTransactions(
+  opts: McpClientOptions,
+  projectId?: number,
+  params?: { search?: string }
+): Promise<ListTransactionsResponse | McpError> {
+  const args: Record<string, unknown> = {};
+  if (projectId !== undefined) args.project_id = projectId;
+  if (params?.search !== undefined) args.search = params.search;
+  const raw = await callMcpTool<{ transactions?: unknown[]; count?: number; project_id?: number }>(
+    opts,
+    "payments.list_transactions",
+    args
+  );
+  if ("error" in raw) return raw;
+  const transactions = Array.isArray(raw.transactions) ? raw.transactions : [];
+  return {
+    transactions: transactions as PaymentTransaction[],
+    count: typeof raw.count === "number" ? raw.count : transactions.length,
+    project_id: raw.project_id,
+  };
+}
+
+/** Get user profile from ecosystem (auth.get_profile). Returns profile for user card (email, name, role, etc.). */
+export async function getProfile(opts: McpClientOptions): Promise<GetProfileResponse | McpError> {
+  const raw = await callMcpTool<{ profile?: GetProfileResponse; data?: GetProfileResponse } & GetProfileResponse>(
+    opts,
+    "auth.get_profile",
+    {}
+  );
+  if ("error" in raw) return raw;
+  const profile = raw.profile ?? raw.data ?? raw;
+  return profile as GetProfileResponse;
 }
 
 /** List logic rules (logic.list). Pass projectId to scope by project (_project_id). */

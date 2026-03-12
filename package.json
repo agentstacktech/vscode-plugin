@@ -2,7 +2,7 @@
   "name": "agentstack-mcp",
   "displayName": "AgentStack MCP",
   "description": "AgentStack MCP server for VS Code: 8DNA hierarchical data, Rules Engine, Buffs, Payments, 60+ tools (Projects, Auth, Scheduler, Analytics, Webhooks, Notifications, Wallets).",
-  "version": "0.4.44",
+  "version": "0.4.45",
   "publisher": "AgentStack",
   "license": "MIT",
   "repository": "https://github.com/agentstacktech/vscode-plugin",
@@ -50,6 +50,7 @@
     "onCommand:agentstack-mcp.listActiveBuffs",
     "onCommand:agentstack-mcp.listRules",
     "onCommand:agentstack-mcp.showWalletBalance",
+    "onCommand:agentstack-mcp.listTransactions",
     "onCommand:agentstack-mcp.listCurrencies"
   ],
   "contributes": {
@@ -109,6 +110,10 @@
       {
         "command": "agentstack-mcp.showWalletBalance",
         "title": "AgentStack: Show ecosystem wallet balance"
+      },
+      {
+        "command": "agentstack-mcp.listTransactions",
+        "title": "AgentStack: List payment transactions"
       },
       {
         "command": "agentstack-mcp.listCurrencies",

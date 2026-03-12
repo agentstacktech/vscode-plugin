@@ -5,11 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.45] - 2026-03-11
+
+### Added
+
+- **List payment transactions** — Command **AgentStack: List payment transactions**, Capabilities → **List transactions** in tree, chat direct path for "list transactions" / "payment history" / "my transactions" (API-only, no model generation). Payments in tree: **Show ecosystem wallet balance** and **List transactions**.
+- **Ecosystem data = no generation** — All read-style answers (projects, users, stats, profile, assets, buffs, balance, currencies, rules, transactions) are served from MCP/API only. Plugin handles these via direct paths; for any other data request the model must call the MCP tool and output only the tool result (no invented data). Rule added to AGENTSTACK_SKILLS_CONTEXT.
+
 ## [0.4.44] - 2026-03-11
 
 ### Added
 
-- **Ecosystem data workflow in plugin** — Full support for viewing and managing ecosystem data from the plugin: **Edit project data** in editor with save via `updateProject`; **Assets** (list/create/update) via mcpClient, chat direct paths ("list assets", "list currencies"), commands **List assets** / **List project currencies**, and Capabilities → Assets in tree; **Buffs** (list active, apply) with chat paths and **List active buffs** command; **Ecosystem wallet balance** (real money) and **project currencies** (in-app assets) clearly separated — commands **Show ecosystem wallet balance** / **List project currencies**, chat "get balance" / "list currencies"; **Rules** (logic.list, logic.get) with **List rules** command and Capabilities → Rules. Payments/Wallets in tree now runs **Show ecosystem wallet balance**.
+- **Ecosystem data workflow in plugin** — Full support for viewing and managing ecosystem data from the plugin: **Edit project data** in editor with save via `updateProject`; **Assets** (list/create/update) via mcpClient, chat direct paths ("list assets", "list currencies"), commands **List assets** / **List project currencies**, and Capabilities → Assets in tree; **Buffs** (list active, apply) with chat paths and **List active buffs** command; **Ecosystem wallet balance** (real money) and **project currencies** (in-app assets) clearly separated — commands **Show ecosystem wallet balance** / **List project currencies**, chat "get balance" / "list currencies"; **Rules** (logic.list, logic.get) with **List rules** command and Capabilities → Rules. Payments/Wallets in tree runs **Show ecosystem wallet balance**.
 - **Project context in chat** — When no project is selected, the plugin uses the first project from the API and shows: "Using project **Name** (ID: X) — first in list. Select in **AgentStack** sidebar to change." so developers always know which project is used.
 - **resolveProjectForChat** — Single helper for resolving project (selected or first) used by all chat direct paths (stats, users, details, assets, buffs, balance, currencies, rules).
 

@@ -5,7 +5,7 @@ import {
   SELECTED_PROJECT_KEY,
   SELECTED_PROJECT_NAME_KEY,
 } from "./ecosystemTree";
-import { fetchProjects, fetchProject, fetchProjectStats, fetchProjectUsers, fetchAssetsList, updateProject, listActiveBuffs, getBalance, logicList } from "./mcpClient";
+import { fetchProjects, fetchProject, fetchProjectStats, fetchProjectUsers, fetchAssetsList, updateProject, listActiveBuffs, getBalance, getProfile, logicList, listTransactions } from "./mcpClient";
 import type { McpClientOptions } from "./mcpClient";
 
 /** Proposed VS Code API (chat, lm, MCP) — not yet in @types/vscode. Cast used only where needed. */
@@ -66,7 +66,8 @@ const AGENTSTACK_SKILLS_CONTEXT = `You are the AgentStack expert. AgentStack is 
 - Auth → auth.get_profile, auth.quick_auth
 - Scheduler, analytics, webhooks, notifications → scheduler.*, analytics.*, webhooks.*, notifications.*
 WRITE OPERATIONS (must use MCP only; reply = only tool result): Creating/updating assets → assets.create, assets.update. Applying buffs → buffs.apply_buff. Adding/removing users or changing roles → use projects.add_user, projects.remove_user, projects.update_user_role when available. Updating project or user data → projects.update_project (field data), commands.execute. Creating/updating/deleting rules → logic.create, logic.update, logic.delete. Payments/refunds → payments.create, payments.refund. For any of these: perform the operation ONLY by calling the corresponding MCP tool; in your reply show ONLY the result of that call (success, error message, or returned data). Do not invent or show example outcomes.
-DATA RULE (all tools): For EVERY AgentStack tool response (projects, stats, users, buffs, payments, auth, rules, 8DNA, etc.) use ONLY the exact data returned by the tool. Never invent, fabricate, or use example/placeholder data. If a tool returns empty, an error, or no items, say so clearly (e.g. "You have no projects yet", "No active buffs", "Stats could not be loaded"); do not substitute example or demo data. Real IDs from AgentStack are numeric (project_id, user_id); never use placeholder IDs like proj_1, proj_2, user_123, or example names like "Demo Project" or "Analytics App".
+ECOSYSTEM DATA = NO GENERATION: All responses that return ecosystem data (projects, users, stats, profile, assets, buffs, balance, currencies, rules, transactions, etc.) must use ONLY the actual MCP tool result—never generate, invent, or substitute example data. The plugin handles many read paths directly (list projects, get stats, list users, project details, list assets, list buffs, get balance, list currencies, list rules, get profile, list transactions). If the user asks for any other read-like data, you MUST call the corresponding MCP tool and output ONLY the tool result (success, error, or returned data). Do not add fictional IDs, names, or placeholder content.
+DATA RULE (all tools): For EVERY AgentStack tool response use ONLY the exact data returned by the tool. Never invent or use example/placeholder data. If a tool returns empty or error, say so clearly; do not substitute demo data. Real IDs are numeric; never use placeholders like proj_1, user_123, or example names like "Demo Project".
 When listing projects: reply only in natural language. Use a short bullet or numbered list: one line per project with name, ID, and one line of stats (e.g. "X requests, Y active buffs"). Do not output JSON, field names alone, or raw tool output.
 CHAT CONTEXT: For "list users", "get my users", "project users", "list assets", "list rules", "get balance", etc., the plugin may have already resolved the project (selected or first in list). If the user asks for users/assets/rules/stats and you have project_id in context, use it directly; do not say "no projects found" if the plugin or a previous step already provided project context.
 CRITICAL: Your reply is shown directly to the user. Do not output your planning, reasoning, or step-by-step thoughts. Reply only with the final answer to the user. Use natural language in full sentences. You MAY use Markdown for readability: **bold**, bullet or numbered lists, line breaks. Do NOT include: tool names (e.g. projects_projects or projects.get_projects), "call ..." with a tool name, JSON, payloads, curly braces, or raw field lists. Do not output truncated dates or field labels alone. Format lists with Markdown bullets or numbers.`;
@@ -385,6 +386,59 @@ function formatRulesList(
   return `Project has ${count} rule(s):\n\n${lines.join("\n")}`;
 }
 
+/** Format payment transactions list for chat (only real API data). */
+function formatTransactionsList(
+  transactions: Array<{
+    payment_id?: string;
+    status?: string;
+    amount?: number;
+    currency?: string;
+    description?: string;
+    created_at?: string;
+    [key: string]: unknown;
+  }>,
+  count: number,
+  projectId: number | undefined
+): string {
+  if (transactions.length === 0) return `No payment transactions${projectId !== undefined ? ` for project ${projectId}` : ""}.`;
+  const lines = transactions.map((t, i) => {
+    const id = t.payment_id ?? "—";
+    const status = t.status ?? "—";
+    const amount = typeof t.amount === "number" ? t.amount : "—";
+    const currency = t.currency ?? "";
+    const desc = t.description ?? "";
+    return `${i + 1}. **${id}** — ${status}, ${amount} ${currency}${desc ? `, ${desc}` : ""}`;
+  });
+  return `Payment transactions (${count})${projectId !== undefined ? ` — project ${projectId}` : ""}:\n\n${lines.join("\n")}`;
+}
+
+/** Format profile for chat (user card — only real API fields, no invented values). */
+function formatProfile(profile: {
+  user_id?: number;
+  email?: string;
+  username?: string;
+  display_name?: string;
+  first_name?: string;
+  last_name?: string;
+  role?: string;
+  [key: string]: unknown;
+}): string {
+  const id = profile.user_id ?? "—";
+  const email = profile.email ?? "—";
+  const displayName = profile.display_name?.trim() || undefined;
+  const first = profile.first_name?.trim() || undefined;
+  const last = profile.last_name?.trim() || undefined;
+  const username = profile.username?.trim() || undefined;
+  const name =
+    displayName ||
+    [first, last].filter(Boolean).join(" ") ||
+    username ||
+    "—";
+  const role = profile.role ?? "—";
+  const lines = [`**ID:** ${id}`, `**Email:** ${email}`, `**Name:** ${name}`, `**Role:** ${role}`];
+  return `**Profile** (from ecosystem):\n\n${lines.join("\n")}`;
+}
+
 let chatParticipantRegistered = false;
 
 const CHAT_PARTICIPANT_ID = "agentstack-mcp.agentstack";
@@ -394,9 +448,11 @@ const TOOL_PART_NAMES = ["LanguageModelToolCallPart", "LanguageModelToolResultPa
 
 /** True if the string looks like raw MCP tool result or host tool metadata (should not be shown as user-facing text). */
 function looksLikeMcpToolResultJson(str: string): boolean {
-  if (typeof str !== "string" || str.length < 10) return false;
+  if (typeof str !== "string") return false;
   const trimmed = str.trim();
   if (trimmed.charAt(0) !== "{") return false;
+  if (trimmed.length >= 6 && trimmed.length <= 60 && trimmed.includes('"id"')) return true;
+  if (trimmed.length < 10) return false;
   return (
     trimmed.includes('"projects"') ||
     trimmed.includes('"success"') ||
@@ -432,6 +488,8 @@ function stripKnownArtifactsFromResponse(str: string): string {
     ["{\"\":\"\",\"\":", ""],
     ["\n{}\n", " "],
     ["\n{}", " "],
+    ["{\"id\":\"\"}", ""],
+    ["{ \"id\": \"\" }", ""],
   ];
   let out = str;
   for (const [sub, repl] of artifacts) out = out.split(sub).join(repl);
@@ -547,6 +605,30 @@ function registerChatParticipant(context: vscode.ExtensionContext): boolean {
         return;
       }
       stream.markdown(formatProjectStats(resolved.projectId, resolved.projectName ?? undefined, result));
+      return;
+    }
+
+    const isProfileRequest =
+      /get\s+my\s+profile|my\s+profile|(show|display)\s+profile|who\s+am\s+i|профиль|мой\s+профиль/i.test(userPrompt.trim());
+
+    if (isProfileRequest) {
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        stream.markdown("Set your AgentStack API key first: **AgentStack: Set API Key** or **AgentStack: Create project and get API key**.");
+        return;
+      }
+      stream.progress("Fetching profile…");
+      const result = await getProfile(opts);
+      if ("error" in result) {
+        const errMsg = typeof result.error === "string" ? result.error : String(result.error);
+        stream.markdown(
+          errMsg.includes("Unauthorized") || errMsg.includes("authenticated")
+            ? "User not authenticated. Set your API key: **AgentStack: Set API Key** or **AgentStack: Create project and get API key**."
+            : `Could not load profile: ${errMsg}.`
+        );
+        return;
+      }
+      stream.markdown(formatProfile(result));
       return;
     }
 
@@ -750,6 +832,28 @@ function registerChatParticipant(context: vscode.ExtensionContext): boolean {
         return;
       }
       stream.markdown(formatRulesList(result.logic ?? [], result.count ?? 0));
+      return;
+    }
+
+    const isListTransactionsRequest =
+      /list\s+transactions?|transactions?\s+list|payment\s+history|my\s+transactions?|история\s+платежей|мои\s+транзакции?/i.test(userPrompt.trim());
+    if (isListTransactionsRequest) {
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        stream.markdown("Set your API key first: **AgentStack: Set API Key**.");
+        return;
+      }
+      const resolved = await resolveProjectForChat(opts, selectedProjectId, selectedProjectName);
+      if (resolved.projectId !== undefined) {
+        stream.markdown(`Using project **${resolved.projectName ?? "ID " + resolved.projectId}** (ID: ${resolved.projectId}).\n\n`);
+      }
+      stream.progress("Fetching transactions…");
+      const result = await listTransactions(opts, resolved.projectId);
+      if ("error" in result) {
+        stream.markdown(`Could not load transactions: ${result.error}.`);
+        return;
+      }
+      stream.markdown(formatTransactionsList(result.transactions ?? [], result.count ?? 0, result.project_id));
       return;
     }
 
@@ -1104,6 +1208,46 @@ function activateInner(context: vscode.ExtensionContext): void {
             currency: result.currency,
             project_id: result.project_id,
             updated_at: result.updated_at,
+          },
+          null,
+          2
+        ),
+        language: "json",
+      });
+      void vscode.window.showTextDocument(doc, { preview: false });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.listTransactions", async (projectIdArg?: number) => {
+      let projectId = typeof projectIdArg === "number" ? projectIdArg : context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY) ?? context.globalState.get<number | undefined>("agentstack.lastProjectId");
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        void vscode.window.showErrorMessage("Set API key first (AgentStack: Set API Key).");
+        return;
+      }
+      if (projectId === undefined) {
+        const projResult = await fetchProjects(opts);
+        if ("error" in projResult) {
+          void vscode.window.showErrorMessage(`AgentStack: ${projResult.error}`);
+          return;
+        }
+        const first = projResult.projects.filter((p) => !isPlaceholderProject(p))[0];
+        const rawId = first?.project_id ?? first?.id;
+        projectId = typeof rawId === "number" ? rawId : undefined;
+      }
+      const result = await listTransactions(opts, projectId);
+      if ("error" in result) {
+        void vscode.window.showErrorMessage(`AgentStack: ${result.error}`);
+        return;
+      }
+      const doc = await vscode.workspace.openTextDocument({
+        content: JSON.stringify(
+          {
+            _comment: "Payment transactions from ecosystem. Use @agentstack in Chat: list transactions, payment history.",
+            project_id: result.project_id,
+            count: result.count,
+            transactions: result.transactions ?? [],
           },
           null,
           2

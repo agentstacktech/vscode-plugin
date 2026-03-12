@@ -282,6 +282,7 @@ export class EcosystemTreeDataProvider implements vscode.TreeDataProvider<Ecosys
         { label: "Assets", icon: "package", command: "agentstack-mcp.listAssets", commandTitle: "List assets", commandArgs: [element.projectId] },
         { label: "Buffs", icon: "gift", command: "agentstack-mcp.listActiveBuffs", commandTitle: "List active buffs", commandArgs: [element.projectId] },
         { label: "Payments / Wallets", icon: "credit-card", command: "agentstack-mcp.showWalletBalance", commandTitle: "Show ecosystem wallet balance", commandArgs: [element.projectId] },
+        { label: "List transactions", icon: "list-unordered", command: "agentstack-mcp.listTransactions", commandTitle: "List payment transactions", commandArgs: [element.projectId] },
         { label: "Rules", icon: "symbol-event", command: "agentstack-mcp.listRules", commandTitle: "List rules", commandArgs: [element.projectId] },
         { label: "8DNA (data)", link: DOCS_DNA_KEY_VALUE, icon: "database" },
       ];
@@ -292,6 +293,7 @@ export class EcosystemTreeDataProvider implements vscode.TreeDataProvider<Ecosys
             "Assets": "List project assets (cards, currencies, items). Use Chat: list currencies for in-app currencies only.",
             "Buffs": "List active buffs. Use @agentstack in Chat to apply or manage buffs.",
             "Payments / Wallets": "Ecosystem wallet balance (real money). For in-app currencies use Assets or Chat: list currencies.",
+            "List transactions": "Payment history. Also in Chat: list transactions, payment history.",
             "Rules": "List logic rules. Use @agentstack in Chat to create or update rules.",
           };
           node.tooltip = tooltips[item.label] ?? "Use @agentstack in Chat for more.";
