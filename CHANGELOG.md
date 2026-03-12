@@ -5,7 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.42] - 2026-03-11
+
+### Added
+
+- **AgentStack: Copy user ID** — Copies the selected user's ID to the clipboard (Command Palette or right-click on a user in Project detail → Users). Context menu on user node: Show user in editor, Copy user ID.
+- **Status bar tooltip** — When a project is selected, tooltip now says: "Copy project ID: right-click project in tree → Copy project ID."
+
+### Changed
+
+- **Show user in editor** — Works from context menu (no args): uses the selected user node in the tree. UI improvement ideas documented in docs/UI_IMPROVEMENTS.md.
+
+## [0.4.40] - 2026-03-11
+
+### Added
+
+- **AgentStack: Save project settings from editor** — After opening project settings (Ecosystem → Project detail → Settings), edit the JSON and run this command to push `data.config` via `projects.update_project`.
+- **AgentStack: Unselect project** — Clear the selected project; available under Project detail in the tree and via Command Palette.
+- **Unselect project** node under Project detail in the Ecosystem tree.
+- **Ecosystem tree UI** — Icons (ThemeIcon) for all nodes (Status, Projects, Project detail, Summary, Data, Users, User, Settings, Documentation, etc.). **Create project** node under Projects (one-click create). **No projects — Create project** when the list is empty. Error nodes are clickable (Retry). **Capabilities** node under Project detail (Buffs, Payments/Wallets, Rules, 8DNA) with links to docs and tooltip to use @agentstack in Chat.
+- **Context menu** — Right-click on tree nodes: Refresh and Create project (Projects root); Copy project ID and Show project data in editor (project); Set API key, Show API key & project info, Create project (Status); Unselect and Refresh (Project detail); Open/Save project settings (Settings).
+- **AgentStack: Copy project ID** — Copies the selected project ID to the clipboard (Command Palette or context menu on project).
+- **Status bar** — Shows project name when available (e.g. "AgentStack (My Project)"); selection stores `selectedProjectName` in globalState.
+
+### Changed
+
+- **MCP client** — `updateProject()` added for `projects.update_project`; 401/403 responses now return user-friendly messages (Set API key / Check project access or subscription).
+- **Settings** tooltip in tree now mentions "Save project settings from editor" after editing.
+- **openLink** — Errors when opening a URL are logged to Output → AgentStack MCP before fallback to Plugins index.
+- **Show user in editor** — Opened JSON now includes `user_data_docs` URL (DNA_KEY_VALUE_API) for quick reference.
+- **resolveMcpServerDefinition** — Typed with `McpServerDefinitionInput` instead of `any`; return value explicitly includes `label`, `uri`, `headers`, `version`.
+- **Ecosystem tree** — Try/catch around `fetchProjects` and `fetchProjectUsers`; on throw, a single "Failed to load" node is shown instead of crashing.
+- **Documentation** node in the tree is expanded by default so doc links are visible without expanding.
+- **Documentation reorganized** — Root **Documentation** now has 3 links only: MCP Server Capabilities, 8DNA & Key-Value API, Plugins index (Cursor, Claude, GPT). Removed the 12-item duplicate list (same URLs); domain shortcuts (Buffs, Payments, Rules, 8DNA) stay under **Project detail → Capabilities**. Removed standalone "Same MCP" node (merged into Documentation → Plugins index).
+
+### Fixed
+
+- MCP availability — connection and display of tools in chat.
+- **AgentStack: Open documentation** — command opens the correct plugins index link: `https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/README.md`
+- **Doc links** — All AgentStack repo doc links now use `blob/master` (e.g. MCP_SERVER_CAPABILITIES.md, plugins/README.md, DNA_KEY_VALUE_API.md) in extension, tree, README, TESTING_AND_CAPABILITIES, MCP_QUICKSTART, CHANGELOG.
 
 ## [0.4.37] - 2026-03-11
 

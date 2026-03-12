@@ -1,4 +1,12 @@
 import * as vscode from "vscode";
+import {
+  EcosystemNode,
+  EcosystemTreeDataProvider,
+  SELECTED_PROJECT_KEY,
+  SELECTED_PROJECT_NAME_KEY,
+} from "./ecosystemTree";
+import { fetchProjects, fetchProject, fetchProjectUsers, updateProject } from "./mcpClient";
+import type { McpClientOptions } from "./mcpClient";
 
 /** Proposed VS Code API (chat, lm, MCP) — not yet in @types/vscode. Cast used only where needed. */
 interface ProposedVscodeApi {
@@ -11,6 +19,15 @@ interface ProposedVscodeApi {
   McpHttpServerDefinition?: new (opts: { label: string; uri: string; headers: Record<string, string>; version: string }) => unknown;
 }
 
+/** Minimal shape for MCP server definition passed to resolveMcpServerDefinition (proposed API). */
+interface McpServerDefinitionInput {
+  label: string;
+  uri?: string;
+  headers?: Record<string, string>;
+  version?: string;
+  [key: string]: unknown;
+}
+
 const vscodeProposed = (vscode as unknown as ProposedVscodeApi);
 
 const MCP_PROVIDER_ID = "agentstack";
@@ -19,9 +36,9 @@ const DEFAULT_MCP_URI = "https://agentstack.tech/mcp";
 const CONNECTED_MESSAGE = "AgentStack connected. 60+ tools available in chat.";
 const OUTPUT_CHANNEL_NAME = "AgentStack MCP";
 
-/** Base URL for AgentStack docs (plugins index, MCP capabilities). */
+/** Base URL for AgentStack docs (plugins index, MCP capabilities). Canonical: agentstacktech/AgentStack, branch master. */
 const DOCS_BASE = "https://github.com/agentstacktech/AgentStack/blob/master";
-const DOCS_PLUGINS_INDEX = `${DOCS_BASE}/docs/plugins/README.md`;
+const DOCS_PLUGINS_INDEX = "https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/README.md";
 const DOCS_MCP_CAPABILITIES = `${DOCS_BASE}/docs/MCP_SERVER_CAPABILITIES.md`;
 const DOCS_DNA_KEY_VALUE = `${DOCS_BASE}/docs/architecture/DNA_KEY_VALUE_API.md`;
 
@@ -76,6 +93,17 @@ function getRequestTimeoutMs(): number {
   return Math.max(1, Math.min(300, sec)) * 1000;
 }
 
+/** MCP client options for tree and commands. Returns null if no API key. */
+async function getMcpOptions(context: vscode.ExtensionContext): Promise<McpClientOptions | null> {
+  const apiKey = await getApiKey(context);
+  if (!apiKey || apiKey.trim() === "") return null;
+  return {
+    baseUrl: getBaseUrl(),
+    apiKey: apiKey.trim(),
+    timeoutMs: getRequestTimeoutMs(),
+  };
+}
+
 /** Fetch with timeout; throws on timeout or non-ok. */
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const ac = new AbortController();
@@ -88,7 +116,10 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   }
 }
 
-/** Get API key: from settings (apiKey) if set, otherwise from SecretStorage. */
+/**
+ * Get API key: from settings (apiKey) if set, otherwise from SecretStorage.
+ * Used for MCP, chat participant, and tree views.
+ */
 async function getApiKey(context: vscode.ExtensionContext): Promise<string | undefined> {
   const cfg = vscode.workspace.getConfiguration("agentstack-mcp");
   const fromSettings = cfg.get<string>("apiKey", "");
@@ -102,82 +133,6 @@ async function getApiKey(context: vscode.ExtensionContext): Promise<string | und
 function keyPreview(key: string): string {
   if (key.length <= 12) return key.slice(0, 4) + "…";
   return key.slice(0, 8) + "…" + key.slice(-4);
-}
-
-/** Ecosystem domain for Tree View: label, short description, and optional doc link. */
-interface EcosystemDomain {
-  label: string;
-  description: string;
-  link: string;
-}
-
-const ECOSYSTEM_DOMAINS: EcosystemDomain[] = [
-  { label: "Projects", description: "Create project, list projects, API key, stats, activity.", link: DOCS_MCP_CAPABILITIES },
-  { label: "8DNA (JSON+)", description: "Data store: project.data, user.data; key-value API, variants (A/B).", link: DOCS_DNA_KEY_VALUE },
-  { label: "Rules Engine", description: "When/then, triggers, automation, no-code rules (logic.*, rules.*).", link: DOCS_MCP_CAPABILITIES },
-  { label: "Buffs", description: "Trials, subscriptions, effects, limits (buffs.*).", link: DOCS_MCP_CAPABILITIES },
-  { label: "Payments", description: "Payments, refunds, wallets (payments.*, wallets.*).", link: DOCS_MCP_CAPABILITIES },
-  { label: "Auth", description: "Login, register, profile, session (auth.*).", link: DOCS_MCP_CAPABILITIES },
-  { label: "RBAC", description: "Roles, permissions, project membership.", link: DOCS_MCP_CAPABILITIES },
-  { label: "Assets", description: "Inventory, digital goods, catalog (assets.*).", link: DOCS_MCP_CAPABILITIES },
-  { label: "Scheduler", description: "Scheduled tasks (scheduler.*).", link: DOCS_MCP_CAPABILITIES },
-  { label: "Analytics", description: "Analytics (analytics.*).", link: DOCS_MCP_CAPABILITIES },
-  { label: "Webhooks", description: "Webhooks (webhooks.*).", link: DOCS_MCP_CAPABILITIES },
-  { label: "Notifications", description: "Notifications (notifications.*).", link: DOCS_MCP_CAPABILITIES },
-];
-
-class EcosystemTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
-  private _onDidChangeTreeData = new vscode.EventEmitter<void>();
-  readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
-
-  constructor(private readonly context: vscode.ExtensionContext) {}
-
-  refresh(): void {
-    this._onDidChangeTreeData.fire();
-  }
-
-  getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
-    return element;
-  }
-
-  async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
-    if (element) return [];
-
-    const apiKey = await getApiKey(this.context);
-    const hasKey = !!(apiKey && apiKey.trim() !== "");
-    const projectId = this.context.globalState.get<number | undefined>("agentstack.lastProjectId");
-
-    const statusItem = new vscode.TreeItem(
-      hasKey
-        ? (projectId !== undefined ? `Connected (project ${projectId})` : "Connected")
-        : "Set API key",
-      vscode.TreeItemCollapsibleState.None
-    );
-    statusItem.tooltip = hasKey
-      ? "API key is set. Click to see key & project info."
-      : "Click to set your AgentStack API key.";
-    statusItem.command = {
-      command: hasKey ? "agentstack-mcp.showApiKeyAndProjectInfo" : "agentstack-mcp.setApiKey",
-      title: statusItem.label as string,
-    };
-
-    const domainItems: vscode.TreeItem[] = ECOSYSTEM_DOMAINS.map((d) => {
-      const item = new vscode.TreeItem(d.label, vscode.TreeItemCollapsibleState.None);
-      item.tooltip = d.description;
-      item.command = { command: "agentstack-mcp.openLink", title: d.label, arguments: [d.link] };
-      return item;
-    });
-
-    const otherPluginsItem = new vscode.TreeItem("Same MCP: Cursor, Claude, GPT", vscode.TreeItemCollapsibleState.None);
-    otherPluginsItem.tooltip = "AgentStack plugins for Cursor, Claude Code, and ChatGPT use the same MCP endpoint.";
-    otherPluginsItem.command = {
-      command: "agentstack-mcp.openLink",
-      title: "Open plugins index",
-      arguments: [DOCS_PLUGINS_INDEX],
-    };
-
-    return [statusItem, ...domainItems, otherPluginsItem];
-  }
 }
 
 /**
@@ -262,45 +217,6 @@ async function createProjectAnonymous(baseUrl: string, projectName: string): Pro
   return { error: "Response missing user_api_key / api_key" };
 }
 
-/** Call MCP projects.get_projects with X-API-Key. Returns { projects, count } or { error }. */
-async function fetchProjectsList(baseUrl: string, apiKey: string): Promise<{ projects: Array<{ id?: number; project_id?: number; name?: string; stats?: { requests?: number }; [key: string]: unknown }>; count?: number } | { error: string }> {
-  const base = baseUrl.replace(/\/$/, "");
-  let res: Response;
-  try {
-    res = await fetchWithTimeout(
-      `${base}/tools`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json; charset=utf-8", "X-API-Key": apiKey },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          method: "tools/call",
-          params: { name: "projects.get_projects", arguments: {} },
-          id: "vscode-get-projects-" + Date.now(),
-        }),
-      },
-      getRequestTimeoutMs()
-    );
-  } catch (e) {
-    const msg = e instanceof Error && e.name === "AbortError" ? "Request timed out." : (e instanceof Error ? e.message : String(e));
-    return { error: msg };
-  }
-  if (!res.ok) return { error: `HTTP ${res.status}: ${res.statusText}` };
-  const json = (await res.json()) as { result?: { content?: Array<{ text?: string }>; isError?: boolean }; error?: { message?: string } };
-  if (json.error) return { error: json.error.message || JSON.stringify(json.error) };
-  const text = json.result?.content?.[0]?.text;
-  if (!text) return { error: "Empty response from MCP" };
-  try {
-    const data = JSON.parse(text) as { data?: { projects?: unknown[]; count?: number }; projects?: unknown[]; count?: number; error?: string };
-    if (data.error) return { error: data.error };
-    const inner = data.data ?? data;
-    const projects = Array.isArray(inner.projects) ? inner.projects : [];
-    const count = typeof inner.count === "number" ? inner.count : projects.length;
-    return { projects: projects as Array<{ id?: number; project_id?: number; name?: string; stats?: { requests?: number }; [key: string]: unknown }>, count };
-  } catch {
-    return { error: "Invalid JSON in MCP response" };
-  }
-}
 
 /** Format projects list as markdown for chat. */
 function formatProjectsList(
@@ -414,7 +330,6 @@ function registerChatParticipant(context: vscode.ExtensionContext): boolean {
     const promptFromCommand = command ? SLASH_COMMAND_PROMPTS[command] ?? "" : "";
     const userPrompt = [promptFromCommand, request.prompt ?? ""].filter(Boolean).join(". ");
     const apiKey = await getApiKey(context);
-    const baseUrl = getBaseUrl();
 
     const isListProjectsRequest =
       command === "listProjects" ||
@@ -422,12 +337,13 @@ function registerChatParticipant(context: vscode.ExtensionContext): boolean {
       /список\s+проектов/i.test(userPrompt.trim());
 
     if (isListProjectsRequest) {
-      if (!apiKey || apiKey.trim() === "") {
+      const opts = await getMcpOptions(context);
+      if (!opts) {
         stream.markdown("To list projects, set your AgentStack API key first: **AgentStack: Set API Key** or **AgentStack: Create project and get API key**.");
         return;
       }
       stream.progress("Fetching your projects…");
-      const result = await fetchProjectsList(baseUrl, apiKey.trim());
+      const result = await fetchProjects(opts);
       if ("error" in result) {
         stream.markdown(`Could not load projects: ${result.error}. Check your API key (**AgentStack: Set API Key**) and try again.`);
         return;
@@ -506,6 +422,7 @@ function registerChatParticipant(context: vscode.ExtensionContext): boolean {
 }
 
 function activateInner(context: vscode.ExtensionContext): void {
+  if (!outputChannel) outputChannel = vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
   const tryRegister = () => registerChatParticipant(context);
   const tryRegisterSafe = () => {
     try {
@@ -539,23 +456,39 @@ function activateInner(context: vscode.ExtensionContext): void {
 
   const didChangeEmitter = new vscode.EventEmitter<void>();
 
-  const ecosystemProvider = new EcosystemTreeDataProvider(context);
-  context.subscriptions.push(
-    vscode.window.createTreeView("agentstack-mcp.ecosystemView", {
-      treeDataProvider: ecosystemProvider,
-      showCollapseAll: false,
-    })
-  );
+  const ecosystemProvider = new EcosystemTreeDataProvider({
+    context,
+    getMcpOptions: () => getMcpOptions(context),
+    getApiKey: () => getApiKey(context),
+  });
+  const ecosystemTreeView = vscode.window.createTreeView("agentstack-mcp.ecosystemView", {
+    treeDataProvider: ecosystemProvider,
+    showCollapseAll: false,
+  });
+  context.subscriptions.push(ecosystemTreeView);
   const updateEcosystemAndStatusBar = async (): Promise<void> => {
     ecosystemProvider.refresh();
     const apiKey = await getApiKey(context);
     const hasKey = !!(apiKey && apiKey.trim() !== "");
-    const projectId = context.globalState.get<number | undefined>("agentstack.lastProjectId");
+    const projectId =
+      context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY) ??
+      context.globalState.get<number | undefined>("agentstack.lastProjectId");
+    const projectName = context.globalState.get<string | undefined>(SELECTED_PROJECT_NAME_KEY);
     if (statusBarItem) {
+      const projectLabel =
+        projectId !== undefined
+          ? projectName
+            ? `$(database) AgentStack (${projectName})`
+            : `$(database) AgentStack (project ${projectId})`
+          : "";
       statusBarItem.text = hasKey
-        ? (projectId !== undefined ? `$(database) AgentStack (project ${projectId})` : "$(database) AgentStack")
+        ? (projectId !== undefined ? projectLabel : "$(database) AgentStack")
         : "$(database) AgentStack: Set API key";
-      statusBarItem.tooltip = hasKey ? "AgentStack connected. Click for API key & project info." : "Click to set API key.";
+      statusBarItem.tooltip = hasKey
+        ? projectId !== undefined
+          ? "AgentStack connected. Click: API key & project info. Copy project ID: right-click project in tree → Copy project ID."
+          : "AgentStack connected. Click for API key & project info."
+        : "Click to set API key.";
       statusBarItem.command = hasKey ? "agentstack-mcp.showApiKeyAndProjectInfo" : "agentstack-mcp.setApiKey";
       statusBarItem.show();
     }
@@ -581,26 +514,198 @@ function activateInner(context: vscode.ExtensionContext): void {
       const url = typeof urlArg === "string" && urlArg.trim() !== "" ? urlArg.trim() : DOCS_PLUGINS_INDEX;
       try {
         void vscode.env.openExternal(vscode.Uri.parse(url));
-      } catch {
+      } catch (e) {
+        if (outputChannel) {
+          outputChannel.appendLine(`[openLink] Failed to open ${url}: ${e instanceof Error ? e.message : String(e)}`);
+        }
         void vscode.env.openExternal(vscode.Uri.parse(DOCS_PLUGINS_INDEX));
       }
     })
   );
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.selectProject", async (projectId: number, projectName?: string) => {
+      if (typeof projectId !== "number") return;
+      await context.globalState.update(SELECTED_PROJECT_KEY, projectId);
+      await context.globalState.update(SELECTED_PROJECT_NAME_KEY, typeof projectName === "string" ? projectName : undefined);
+      didChangeEmitter.fire();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.unselectProject", async () => {
+      await context.globalState.update(SELECTED_PROJECT_KEY, undefined);
+      await context.globalState.update(SELECTED_PROJECT_NAME_KEY, undefined);
+      didChangeEmitter.fire();
+      void vscode.window.showInformationMessage("Project unselected.");
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.copyProjectId", async () => {
+      const projectId = context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY);
+      if (projectId === undefined) {
+        void vscode.window.showInformationMessage("Select a project first (Ecosystem → Projects → click a project).");
+        return;
+      }
+      await vscode.env.clipboard.writeText(String(projectId));
+      void vscode.window.showInformationMessage("Project ID copied to clipboard.");
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.refreshEcosystem", () => {
+      ecosystemProvider.refresh();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.showProjectDataInEditor", async (projectIdArg?: number) => {
+      const projectId = typeof projectIdArg === "number" ? projectIdArg : context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY);
+      if (projectId === undefined) return;
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        void vscode.window.showErrorMessage("Set API key first (AgentStack: Set API Key).");
+        return;
+      }
+      const result = await fetchProject(opts, projectId);
+      if ("error" in result) {
+        void vscode.window.showErrorMessage(`AgentStack: ${result.error}`);
+        return;
+      }
+      const doc = await vscode.workspace.openTextDocument({
+        content: JSON.stringify(result, null, 2),
+        language: "json",
+      });
+      void vscode.window.showTextDocument(doc, { preview: false });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.openProjectSettingsInEditor", async (projectIdArg?: number) => {
+      const projectId = typeof projectIdArg === "number" ? projectIdArg : context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY);
+      if (projectId === undefined) return;
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        void vscode.window.showErrorMessage("Set API key first (AgentStack: Set API Key).");
+        return;
+      }
+      const result = await fetchProject(opts, projectId);
+      if ("error" in result) {
+        void vscode.window.showErrorMessage(`AgentStack: ${result.error}`);
+        return;
+      }
+      const data = result.data ?? result;
+      const config = (data as { config?: Record<string, unknown> }).config ?? {};
+      const doc = await vscode.workspace.openTextDocument({
+        content: JSON.stringify(config, null, 2),
+        language: "json",
+      });
+      void vscode.window.showTextDocument(doc, { preview: false });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.saveProjectSettingsFromEditor", async () => {
+      const projectId = context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY);
+      if (projectId === undefined) {
+        void vscode.window.showErrorMessage("Select a project first (Ecosystem → Projects → click a project).");
+        return;
+      }
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        void vscode.window.showErrorMessage("Open the project settings JSON in the editor, then run this command.");
+        return;
+      }
+      let config: Record<string, unknown>;
+      try {
+        config = JSON.parse(editor.document.getText()) as Record<string, unknown>;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        void vscode.window.showErrorMessage(`Invalid JSON: ${msg}`);
+        return;
+      }
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        void vscode.window.showErrorMessage("Set API key first (AgentStack: Set API Key).");
+        return;
+      }
+      const result = await updateProject(opts, projectId, { data: { config } });
+      if ("error" in result) {
+        void vscode.window.showErrorMessage(`AgentStack: ${result.error}`);
+        return;
+      }
+      ecosystemProvider.refresh();
+      void vscode.window.showInformationMessage("Project settings saved.");
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "agentstack-mcp.showUserInEditor",
+      async (projectIdArg?: number, userIdArg?: number, userEmail?: string) => {
+        let projectId = typeof projectIdArg === "number" ? projectIdArg : undefined;
+        let userId = typeof userIdArg === "number" ? userIdArg : undefined;
+        if (projectId === undefined || userId === undefined) {
+          const sel = ecosystemTreeView.selection[0];
+          if (sel instanceof EcosystemNode && sel.nodeKind === "user") {
+            projectId = sel.projectId;
+            userId = sel.userId;
+            if (userEmail === undefined) userEmail = sel.userEmail;
+          }
+        }
+        if (typeof projectId !== "number" || typeof userId !== "number") return;
+        const doc = await vscode.workspace.openTextDocument({
+          content: JSON.stringify(
+            {
+              project_id: projectId,
+              user_id: userId,
+              email: userEmail ?? "",
+              user_data_note: "user.data is per user/project. Use key-value API: user.data.<path>.",
+              user_data_docs: DOCS_DNA_KEY_VALUE,
+            },
+            null,
+            2
+          ),
+          language: "json",
+        });
+        void vscode.window.showTextDocument(doc, { preview: false });
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.copyUserId", () => {
+      const sel = ecosystemTreeView.selection;
+      const node = sel[0];
+      if (node instanceof EcosystemNode && node.nodeKind === "user" && node.userId !== undefined) {
+        void vscode.env.clipboard.writeText(String(node.userId)).then(() => {
+          void vscode.window.showInformationMessage(`User ID ${node.userId} copied to clipboard.`);
+        });
+      } else {
+        void vscode.window.showInformationMessage("Select a user in the tree (Project detail → Users), then right-click → Copy user ID.");
+      }
+    })
+  );
+
   function registerMcpProvider(): boolean {
-    const lm = vscodeProposed.lm;
-    const McpHttp = vscodeProposed.McpHttpServerDefinition;
+    const vscodeAny = vscode as unknown as Record<string, unknown>;
+    const lm = (vscodeAny.lm ?? vscodeProposed.lm) as { registerMcpServerDefinitionProvider?: (id: string, provider: unknown) => vscode.Disposable } | undefined;
+    const McpHttp =
+      (vscodeAny.McpHttpServerDefinition ?? (vscodeAny.lm as Record<string, unknown> | undefined)?.McpHttpServerDefinition ?? vscodeProposed.McpHttpServerDefinition) as
+        | (new (opts: { label: string; uri: string; headers: Record<string, string>; version: string }) => unknown)
+        | undefined;
     if (typeof lm?.registerMcpServerDefinitionProvider !== "function" || typeof McpHttp !== "function") {
       return false;
     }
     try {
       context.subscriptions.push(
-        lm!.registerMcpServerDefinitionProvider!(MCP_PROVIDER_ID, {
+        lm.registerMcpServerDefinitionProvider(MCP_PROVIDER_ID, {
           onDidChangeMcpServerDefinitions: didChangeEmitter.event,
-          provideMcpServerDefinitions: async (): Promise<any[]> => {
+          provideMcpServerDefinitions: async (): Promise<unknown[]> => {
             const baseUrl = getBaseUrl();
             return [
-              new (McpHttp as new (opts: { label: string; uri: string; headers: Record<string, string>; version: string }) => unknown)({
+              new McpHttp({
                 label: "agentstack",
                 uri: baseUrl,
                 headers: {
@@ -611,7 +716,7 @@ function activateInner(context: vscode.ExtensionContext): void {
               }),
             ];
           },
-          resolveMcpServerDefinition: async (server: any): Promise<any | undefined> => {
+          resolveMcpServerDefinition: async (server: McpServerDefinitionInput): Promise<unknown> => {
             if (server.label !== "agentstack") {
               return server;
             }
@@ -630,31 +735,55 @@ function activateInner(context: vscode.ExtensionContext): void {
               await context.secrets.store(SECRET_KEY, apiKey.trim());
             }
             const headers = { ...server.headers, "X-API-Key": apiKey! };
-            return new (McpHttp as new (opts: unknown) => unknown)({ ...server, headers });
+            const uri = typeof server.uri === "string" ? server.uri : getBaseUrl();
+            const version = typeof server.version === "string" ? server.version : "0.1.0";
+            return new McpHttp({ label: server.label, uri, headers, version });
           },
         })
       );
+      if (outputChannel) outputChannel.appendLine("MCP server provider registered; AgentStack appears in Chat when you use @agentstack.");
+      didChangeEmitter.fire();
       return true;
-    } catch {
+    } catch (err) {
+      logActivationError(err);
       return false;
     }
   }
 
-  const tryRegisterMcp = () => registerMcpProvider();
+  const mcpRetryDelaysMs = [0, 500, 1500, 3000, 5000, 10000, 20000];
+  const mcpTimeouts: NodeJS.Timeout[] = [];
+  let mcpRegistered = false;
+  const tryRegisterMcp = (): boolean => {
+    const ok = registerMcpProvider();
+    if (ok) {
+      mcpRegistered = true;
+      mcpTimeouts.forEach((t) => clearTimeout(t));
+      mcpTimeouts.length = 0;
+    }
+    return ok;
+  };
   if (!tryRegisterMcp()) {
-    const mcpRetryDelaysMs = [500, 1500, 3000, 5000, 10000];
-    const mcpTimeouts = mcpRetryDelaysMs.map((ms) =>
-      setTimeout(() => {
-        try {
-          tryRegisterMcp();
-        } catch (err) {
-          logActivationError(err);
-        }
-      }, ms)
+    mcpRetryDelaysMs.slice(1).forEach((ms) =>
+      mcpTimeouts.push(
+        setTimeout(() => {
+          if (tryRegisterMcp() && outputChannel) {
+            outputChannel.appendLine("AgentStack MCP: server provider registered (delayed). Use @agentstack in Chat for 60+ tools.");
+          }
+        }, ms)
+      )
     );
     context.subscriptions.push({
       dispose: () => mcpTimeouts.forEach((t) => clearTimeout(t)),
     });
+    mcpTimeouts.push(
+      setTimeout(() => {
+        if (!mcpRegistered && outputChannel) {
+          outputChannel.appendLine(
+            "AgentStack MCP: server list provider not available (VS Code 1.101+ and Copilot/agent feature required). Use @agentstack in Chat for tools."
+          );
+        }
+      }, 25000)
+    );
   }
 
   const tryRegisterChat = () => registerChatParticipant(context);
@@ -706,6 +835,7 @@ function activateInner(context: vscode.ExtensionContext): void {
           }
           if (result.project_id !== undefined) {
             context.globalState.update("agentstack.lastProjectId", result.project_id);
+            context.globalState.update(SELECTED_PROJECT_KEY, result.project_id);
           }
           if (!existingKey || existingKey.trim() === "") {
             await context.secrets.store(SECRET_KEY, result.user_api_key);
@@ -748,11 +878,13 @@ function activateInner(context: vscode.ExtensionContext): void {
         });
         return;
       }
-      const projectId = context.globalState.get<number | undefined>("agentstack.lastProjectId");
+      const projectId =
+        context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY) ??
+        context.globalState.get<number | undefined>("agentstack.lastProjectId");
       const lines = [
         "**AgentStack API key & project**",
         "",
-        projectId !== undefined ? `Project ID: ${projectId}` : "Project ID: (unknown — create a project to see it)",
+        projectId !== undefined ? `Project ID: ${projectId}` : "Project ID: (unknown — create a project or select one in Ecosystem)",
         `Key preview: \`${keyPreview(apiKey)}\``,
         "",
         "Use **@agentstack** in Chat for 60+ MCP tools. Full tool list: see extension README.",

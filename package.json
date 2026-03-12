@@ -2,7 +2,7 @@
   "name": "agentstack-mcp",
   "displayName": "AgentStack MCP",
   "description": "AgentStack MCP server for VS Code: 8DNA hierarchical data, Rules Engine, Buffs, Payments, 60+ tools (Projects, Auth, Scheduler, Analytics, Webhooks, Notifications, Wallets).",
-  "version": "0.4.37",
+  "version": "0.4.42",
   "publisher": "AgentStack",
   "license": "MIT",
   "repository": "https://github.com/agentstacktech/vscode-plugin",
@@ -11,6 +11,9 @@
   "engines": {
     "vscode": "^1.101.0"
   },
+  "enabledApiProposals": [
+    "mcpServerDefinitions"
+  ],
   "categories": [
     "Other"
   ],
@@ -32,7 +35,15 @@
     "onCommand:agentstack-mcp.createProjectAndGetKey",
     "onCommand:agentstack-mcp.showApiKeyAndProjectInfo",
     "onView:agentstack-mcp.ecosystemView",
-    "onCommand:agentstack-mcp.openDocumentation"
+    "onCommand:agentstack-mcp.openDocumentation",
+    "onCommand:agentstack-mcp.selectProject",
+    "onCommand:agentstack-mcp.refreshEcosystem",
+    "onCommand:agentstack-mcp.showProjectDataInEditor",
+    "onCommand:agentstack-mcp.openProjectSettingsInEditor",
+    "onCommand:agentstack-mcp.showUserInEditor",
+    "onCommand:agentstack-mcp.saveProjectSettingsFromEditor",
+    "onCommand:agentstack-mcp.unselectProject",
+    "onCommand:agentstack-mcp.copyProjectId"
   ],
   "contributes": {
     "commands": [
@@ -54,10 +65,101 @@
       },
       {
         "command": "agentstack-mcp.openLink",
-        "title": "AgentStack: Open link",
-        "enablement": "false"
+        "title": "AgentStack: Open link"
+      },
+      {
+        "command": "agentstack-mcp.selectProject",
+        "title": "AgentStack: Select project"
+      },
+      {
+        "command": "agentstack-mcp.refreshEcosystem",
+        "title": "AgentStack: Refresh Ecosystem"
+      },
+      {
+        "command": "agentstack-mcp.showProjectDataInEditor",
+        "title": "AgentStack: Show project data in editor"
+      },
+      {
+        "command": "agentstack-mcp.openProjectSettingsInEditor",
+        "title": "AgentStack: Open project settings in editor"
+      },
+      {
+        "command": "agentstack-mcp.showUserInEditor",
+        "title": "AgentStack: Show user in editor"
+      },
+      {
+        "command": "agentstack-mcp.saveProjectSettingsFromEditor",
+        "title": "AgentStack: Save project settings from editor"
+      },
+      {
+        "command": "agentstack-mcp.unselectProject",
+        "title": "AgentStack: Unselect project"
+      },
+      {
+        "command": "agentstack-mcp.copyProjectId",
+        "title": "AgentStack: Copy project ID"
+      },
+      {
+        "command": "agentstack-mcp.copyUserId",
+        "title": "AgentStack: Copy user ID"
       }
     ],
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "agentstack-mcp.refreshEcosystem",
+          "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-projects-root"
+        },
+        {
+          "command": "agentstack-mcp.createProjectAndGetKey",
+          "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-projects-root"
+        },
+        {
+          "command": "agentstack-mcp.copyProjectId",
+          "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-project"
+        },
+        {
+          "command": "agentstack-mcp.showProjectDataInEditor",
+          "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-project"
+        },
+        {
+          "command": "agentstack-mcp.setApiKey",
+          "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-status"
+        },
+        {
+          "command": "agentstack-mcp.showApiKeyAndProjectInfo",
+          "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-status"
+        },
+        {
+          "command": "agentstack-mcp.createProjectAndGetKey",
+          "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-status"
+        },
+        {
+          "command": "agentstack-mcp.unselectProject",
+          "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-project-detail"
+        },
+        {
+          "command": "agentstack-mcp.refreshEcosystem",
+          "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-project-detail"
+        },
+        {
+          "command": "agentstack-mcp.openProjectSettingsInEditor",
+          "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-settings"
+        },
+        {
+          "command": "agentstack-mcp.saveProjectSettingsFromEditor",
+          "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-settings"
+        },
+        {
+          "command": "agentstack-mcp.showUserInEditor",
+          "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-user"
+        },
+        {
+          "command": "agentstack-mcp.copyUserId",
+          "when": "view == agentstack-mcp.ecosystemView && viewItem == agentstack-user"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {

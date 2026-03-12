@@ -39,7 +39,7 @@ Full list: repo docs/MCP_SERVER_CAPABILITIES.md.
 
 ## Response format
 
-For "list my projects" / "список проектов" requests, always reply with a human-readable list only: use bullets or numbers, one line per project with **name**, **ID**, and a short stats line (e.g. requests, active buffs). Never output raw JSON or field names without values. If the tool returns no projects (empty list), state that explicitly (e.g. "You have no projects yet") and do not invent or generate example projects or data.
+For "list my projects" requests, always reply with a human-readable list only: use bullets or numbers, one line per project with **name**, **ID**, and a short stats line (e.g. requests, active buffs). Never output raw JSON or field names without values. If the tool returns no projects (empty list), state that explicitly (e.g. "You have no projects yet") and do not invent or generate example projects or data.
 
 ## Examples (natural language → tool)
 
