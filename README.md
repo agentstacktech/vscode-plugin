@@ -35,7 +35,7 @@ All tools are available in **Chat** when you select the **@agentstack** particip
 | Feature | Description |
 |--------|-------------|
 | **MCP registration** | Registers the AgentStack MCP server (HTTP) so VS Code can connect to it. |
-| **Ecosystem view** | **AgentStack** sidebar: **Status** (Set API key / Connected); **Projects** — **Refresh**, **Create project**, then your projects (or "No projects — Create project"); **Project detail** (when a project is selected) — Summary, Data (preview), **Users**, **Settings**, **Capabilities** (Buffs, Payments, Rules, 8DNA — links to docs; use @agentstack in Chat for more), **Unselect project**; **Documentation** (MCP Server Capabilities, 8DNA & Key-Value API, Plugins index). Right-click any node for context menu (e.g. Copy project ID, Refresh). |
+| **Ecosystem view** | **AgentStack** sidebar: **Status** (Set API key / Connected); **Projects** — **Refresh**, **Create project**, then your projects (or "No projects — Create project"); **Project detail** (when a project is selected) — Summary, Data (preview), **Users**, **Settings**, **Scheduler** (if you have read permission: list tasks, run from tree; use Chat to create), **Capabilities** (Buffs, Payments, Rules, 8DNA — links to docs; use @agentstack in Chat for more), **Unselect project**; **Documentation** (MCP Server Capabilities, 8DNA & Key-Value API, Plugins index). Right-click any node for context menu (e.g. Copy project ID, Refresh). |
 | **Project data & settings** | From the tree: **Summary** / **Data (preview)** → **AgentStack: Show project data in editor** (full project JSON); **Settings** → **AgentStack: Open project settings in editor** (view/edit `data.config`). After editing the JSON, run **AgentStack: Save project settings from editor** to push changes via MCP. Use **Unselect project** under Project detail to clear selection. User data (`user.data`) is available via key-value API — see Documentation → 8DNA; for per-user data you can ask in Chat (@agentstack). |
 | **Status bar** | Shows "AgentStack (ProjectName)" or "AgentStack (project id)" when a project is selected, or "Set API key"; click to set key or see key & project info. |
 | **Open documentation** | **AgentStack: Open documentation** (Command Palette) opens the Plugins index and doc links. |
@@ -71,6 +71,7 @@ All tools are available in **Chat** when you select the **@agentstack** particip
 
 - **This plugin:** [github.com/agentstacktech/vscode-plugin](https://github.com/agentstacktech/vscode-plugin)
 - **Quick Start (API key):** [MCP_QUICKSTART.md](MCP_QUICKSTART.md)
+- **Plugin ↔ MCP flow (auth, v1/v2, errors):** [docs/PLUGIN_MCP_FLOW.md](docs/PLUGIN_MCP_FLOW.md)
 - **Full MCP tool list:** [MCP Server Capabilities](https://github.com/agentstacktech/AgentStack/blob/master/docs/MCP_SERVER_CAPABILITIES.md) (AgentStack repo)
 - **Plugins index (Cursor, Claude, GPT, VS Code):** [docs/plugins/README.md](https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/README.md)
 

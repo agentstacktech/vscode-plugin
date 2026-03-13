@@ -5,7 +5,7 @@ import {
   SELECTED_PROJECT_KEY,
   SELECTED_PROJECT_NAME_KEY,
 } from "./ecosystemTree";
-import { fetchProjects, fetchProject, fetchProjectStats, fetchProjectUsers, fetchAssetsList, updateProject, listActiveBuffs, getBalance, getProfile, logicList, listTransactions } from "./mcpClient";
+import { fetchProjects, fetchProject, fetchProjectStats, fetchProjectUsers, fetchAssetsList, updateProject, listActiveBuffs, getBalance, getProfile, logicList, listTransactions, listSchedulerTasks, createSchedulerTask, executeSchedulerTask } from "./mcpClient";
 import type { McpClientOptions } from "./mcpClient";
 
 /** Proposed VS Code API (chat, lm, MCP) — not yet in @types/vscode. Cast used only where needed. */
@@ -33,6 +33,7 @@ const vscodeProposed = (vscode as unknown as ProposedVscodeApi);
 const MCP_PROVIDER_ID = "agentstack";
 const SECRET_KEY = "agentstack.apiKey";
 const DEFAULT_MCP_URI = "https://agentstack.tech/mcp";
+const DEFAULT_MCP_V2_URI = "https://agentstack.tech/v2/mcp";
 const CONNECTED_MESSAGE = "AgentStack connected. 60+ tools available in chat.";
 const OUTPUT_CHANNEL_NAME = "AgentStack MCP";
 
@@ -90,6 +91,30 @@ function getBaseUrl(): string {
   return base || DEFAULT_MCP_URI;
 }
 
+/**
+ * Base URI for VS Code MCP server definition.
+ * - Uses v1 (/mcp) by default.
+ * - When useV2McpServer=true, points to v2 (/v2/mcp) while keeping REST helpers on v1.
+ */
+function getMcpServerUri(): string {
+  const cfg = vscode.workspace.getConfiguration("agentstack-mcp");
+  const useV2 = cfg.get<boolean>("useV2McpServer", false);
+  const base = getBaseUrl().replace(/\/$/, "");
+  if (!useV2) {
+    return base;
+  }
+  // If user already pointed baseUrl to /v2/mcp, use it as-is
+  if (base.endsWith("/v2/mcp")) {
+    return base;
+  }
+  // If base ends with /mcp (default cloud), switch to /v2/mcp
+  if (base.endsWith("/mcp")) {
+    return base.replace(/\/mcp$/, "/v2/mcp");
+  }
+  // Otherwise assume v2 is under /v2/mcp on the same host
+  return `${base}/v2/mcp`;
+}
+
 /** Request timeout in ms from settings (default 60s). */
 function getRequestTimeoutMs(): number {
   const cfg = vscode.workspace.getConfiguration("agentstack-mcp");
@@ -97,12 +122,14 @@ function getRequestTimeoutMs(): number {
   return Math.max(1, Math.min(300, sec)) * 1000;
 }
 
-/** MCP client options for tree and commands. Returns null if no API key. */
+/** MCP client options for tree and commands. Returns null if no API key. Uses v2 baseUrl when useV2McpServer is on so chat/sidebar hit /v2/mcp. */
 async function getMcpOptions(context: vscode.ExtensionContext): Promise<McpClientOptions | null> {
   const apiKey = await getApiKey(context);
   if (!apiKey || apiKey.trim() === "") return null;
+  const cfg = vscode.workspace.getConfiguration("agentstack-mcp");
+  const useV2 = cfg.get<boolean>("useV2McpServer", false);
   return {
-    baseUrl: getBaseUrl(),
+    baseUrl: useV2 ? getMcpServerUri() : getBaseUrl(),
     apiKey: apiKey.trim(),
     timeoutMs: getRequestTimeoutMs(),
   };
@@ -1177,6 +1204,110 @@ function activateInner(context: vscode.ExtensionContext): void {
     })
   );
 
+  const schedulerErrorMessage = (err: unknown) => {
+    const s = typeof err === "string" ? err : String(err ?? "");
+    return /403|Forbidden|Insufficient/.test(s)
+      ? "Insufficient permissions for scheduler in this project."
+      : s;
+  };
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.listSchedulerTasks", async (projectIdArg?: number) => {
+      let projectId = typeof projectIdArg === "number" ? projectIdArg : undefined;
+      if (projectId === undefined && ecosystemTreeView.selection[0] instanceof EcosystemNode) {
+        const sel = ecosystemTreeView.selection[0] as EcosystemNode;
+        if ((sel.nodeKind === "scheduler" || sel.nodeKind === "scheduler-task") && sel.projectId !== undefined) projectId = sel.projectId;
+      }
+      if (projectId === undefined) projectId = context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY) ?? context.globalState.get<number | undefined>("agentstack.lastProjectId");
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        void vscode.window.showErrorMessage("Set API key first (AgentStack: Set API Key).");
+        return;
+      }
+      if (projectId === undefined) {
+        const projResult = await fetchProjects(opts);
+        if ("error" in projResult) {
+          void vscode.window.showErrorMessage(`AgentStack: ${projResult.error}`);
+          return;
+        }
+        const first = projResult.projects.filter((p) => !isPlaceholderProject(p))[0];
+        const rawId = first?.project_id ?? first?.id;
+        projectId = typeof rawId === "number" ? rawId : undefined;
+      }
+      if (projectId === undefined) {
+        void vscode.window.showErrorMessage("No project selected. Select a project in the AgentStack sidebar.");
+        return;
+      }
+      const result = await listSchedulerTasks(opts, projectId);
+      if ("error" in result) {
+        void vscode.window.showErrorMessage(`AgentStack: ${schedulerErrorMessage(result.error)}`);
+        return;
+      }
+      const doc = await vscode.workspace.openTextDocument({
+        content: JSON.stringify({ tasks: result.tasks, count: result.count, project_id: result.project_id }, null, 2),
+        language: "json",
+      });
+      void vscode.window.showTextDocument(doc, { preview: false });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.createSchedulerTask", async (projectIdArg?: number) => {
+      let projectId = typeof projectIdArg === "number" ? projectIdArg : undefined;
+      if (projectId === undefined && ecosystemTreeView.selection[0] instanceof EcosystemNode) {
+        const sel = ecosystemTreeView.selection[0] as EcosystemNode;
+        if ((sel.nodeKind === "scheduler" || sel.nodeKind === "scheduler-task") && sel.projectId !== undefined) projectId = sel.projectId;
+      }
+      if (projectId === undefined) projectId = context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY);
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        void vscode.window.showErrorMessage("Set API key first (AgentStack: Set API Key).");
+        return;
+      }
+      if (projectId === undefined) {
+        void vscode.window.showErrorMessage("No project selected. Select a project in the AgentStack sidebar.");
+        return;
+      }
+      const name = await vscode.window.showInputBox({ title: "Scheduler task name", prompt: "Enter task name" });
+      if (name === undefined || !name.trim()) return;
+      const result = await createSchedulerTask(opts, projectId, { name: name.trim(), schedule: "0 * * * *" });
+      if ("error" in result) {
+        void vscode.window.showErrorMessage(`AgentStack: ${schedulerErrorMessage(result.error)}`);
+        return;
+      }
+      void vscode.window.showInformationMessage(`Scheduler task created: ${(result as { task_id?: string }).task_id ?? (result as { id?: string }).id ?? "ok"}`);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.executeSchedulerTask", async (projectIdArg?: number, taskIdArg?: string) => {
+      let projectId = typeof projectIdArg === "number" ? projectIdArg : context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY);
+      let taskId = typeof taskIdArg === "string" ? taskIdArg : undefined;
+      if ((projectId === undefined || taskId === undefined) && ecosystemTreeView.selection[0] instanceof EcosystemNode) {
+        const sel = ecosystemTreeView.selection[0] as EcosystemNode;
+        if (sel.nodeKind === "scheduler-task") {
+          if (projectId === undefined) projectId = sel.projectId;
+          if (taskId === undefined) taskId = sel.taskId;
+        }
+      }
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        void vscode.window.showErrorMessage("Set API key first (AgentStack: Set API Key).");
+        return;
+      }
+      if (projectId === undefined || !taskId) {
+        void vscode.window.showErrorMessage("Project and task required. Run from Scheduler tree or pass projectId and taskId.");
+        return;
+      }
+      const result = await executeSchedulerTask(opts, projectId, taskId);
+      if ("error" in result) {
+        void vscode.window.showErrorMessage(`AgentStack: ${schedulerErrorMessage(result.error)}`);
+        return;
+      }
+      void vscode.window.showInformationMessage("Scheduler task execution requested.");
+    })
+  );
+
   context.subscriptions.push(
     vscode.commands.registerCommand("agentstack-mcp.showWalletBalance", async (projectIdArg?: number) => {
       let projectId = typeof projectIdArg === "number" ? projectIdArg : context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY) ?? context.globalState.get<number | undefined>("agentstack.lastProjectId");
@@ -1508,7 +1639,7 @@ function activateInner(context: vscode.ExtensionContext): void {
         lm.registerMcpServerDefinitionProvider(MCP_PROVIDER_ID, {
           onDidChangeMcpServerDefinitions: didChangeEmitter.event,
           provideMcpServerDefinitions: async (): Promise<unknown[]> => {
-            const baseUrl = getBaseUrl();
+            const baseUrl = getMcpServerUri();
             return [
               new McpHttp({
                 label: "agentstack",
@@ -1540,7 +1671,7 @@ function activateInner(context: vscode.ExtensionContext): void {
               await context.secrets.store(SECRET_KEY, apiKey.trim());
             }
             const headers = { ...server.headers, "X-API-Key": apiKey! };
-            const uri = typeof server.uri === "string" ? server.uri : getBaseUrl();
+            const uri = typeof server.uri === "string" ? server.uri : getMcpServerUri();
             const version = typeof server.version === "string" ? server.version : "0.1.0";
             return new McpHttp({ label: server.label, uri, headers, version });
           },

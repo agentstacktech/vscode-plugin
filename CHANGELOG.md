@@ -5,7 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.45] - 2026-03-11
+## [0.4.51] - 2026-03-12
+
+### Added
+
+- **Scheduler in Ecosystem tree** — Under Project detail, **Scheduler** node is shown only when the user has `scheduler_read` (from project permissions). Expanding Scheduler lists tasks via `scheduler.list_tasks`; each task is a node with **Execute** (command or context menu). Errors (e.g. 403) show a clear "Insufficient permissions for scheduler in this project" message.
+- **Scheduler commands** — **AgentStack: List scheduler tasks**, **AgentStack: Create scheduler task**, **AgentStack: Execute scheduler task** (Command Palette and tree context menus). When invoked from the context menu on the Scheduler node or a task node, the command uses the selected node's project (and task ID for Execute) so no manual project selection is needed.
+- **Context menus for Scheduler** — Right-click **Scheduler**: "List scheduler tasks", "Create scheduler task". Right-click a **Scheduler task**: "Execute scheduler task".
+- **Plugin ↔ MCP flow doc** — [docs/PLUGIN_MCP_FLOW.md](docs/PLUGIN_MCP_FLOW.md) describes auth, v1/v2 URLs, client (`callMcpTool`, wrappers), backend routes, scheduler flow example, and error handling. Linked from README.
+
+### Changed
+
+- **Execute scheduler task** — When run without arguments (e.g. from context menu), the command reads the selected tree node; scheduler-task nodes now carry `taskId` so Execute works from the tree.
+- **List/Create scheduler task** — When run without project argument, the command uses the selected Scheduler or Scheduler-task node's project when available.
+
+## [0.4.46] - 2026-03-11
 
 ### Added
 

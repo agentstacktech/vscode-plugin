@@ -7,8 +7,10 @@
 import * as vscode from "vscode";
 import {
   fetchProjects,
+  fetchProject,
   fetchProjectStats,
   fetchProjectUsers,
+  listSchedulerTasks,
   type McpClientOptions,
   type ProjectListItem,
   type ProjectUser,
@@ -41,6 +43,7 @@ export class EcosystemNode extends vscode.TreeItem {
       userEmail?: string;
       link?: string;
       description?: string;
+      taskId?: string;
     }
   ) {
     super(label, collapsibleState);
@@ -49,6 +52,7 @@ export class EcosystemNode extends vscode.TreeItem {
     this.userId = options?.userId;
     this.userEmail = options?.userEmail;
     this.link = options?.link;
+    this.taskId = options?.taskId;
     if (options?.description) this.description = options.description;
     this.contextValue = `agentstack-${nodeKind}`;
   }
@@ -57,6 +61,7 @@ export class EcosystemNode extends vscode.TreeItem {
   readonly userId?: number;
   readonly userEmail?: string;
   readonly link?: string;
+  readonly taskId?: string;
 }
 
 export type NodeKind =
@@ -69,6 +74,8 @@ export type NodeKind =
   | "users"
   | "user"
   | "settings"
+  | "scheduler"
+  | "scheduler-task"
   | "unselect"
   | "doc"
   | "refresh"
@@ -83,13 +90,21 @@ export interface EcosystemTreeDeps {
   getApiKey: () => Promise<string | undefined>;
 }
 
+/** Cache scheduler_read/scheduler_write per project_id; cleared on refresh. */
+export interface SchedulerAccessCache {
+  scheduler_read: boolean;
+  scheduler_write: boolean;
+}
+
 export class EcosystemTreeDataProvider implements vscode.TreeDataProvider<EcosystemNode> {
   private _onDidChangeTreeData = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+  private _schedulerAccessCache = new Map<number, SchedulerAccessCache>();
 
   constructor(private readonly deps: EcosystemTreeDeps) {}
 
   refresh(): void {
+    this._schedulerAccessCache.clear();
     this._onDidChangeTreeData.fire();
   }
 
@@ -179,9 +194,11 @@ export class EcosystemTreeDataProvider implements vscode.TreeDataProvider<Ecosys
         return [refreshNode, createNode, err];
       }
       if ("error" in result) {
-        const err = new EcosystemNode(`Error: ${result.error}`, "doc", vscode.TreeItemCollapsibleState.None);
-        err.description = "Check API key";
-        err.tooltip = "Click to retry.";
+        const msg = result.error;
+        const is404 = typeof msg === "string" && (msg.includes("404") || msg.includes("Not found"));
+        const err = new EcosystemNode(is404 ? "Projects: not found (404)" : `Error: ${msg}`, "doc", vscode.TreeItemCollapsibleState.None);
+        err.description = is404 ? "Update backend or use MCP v1" : "Check API key";
+        err.tooltip = typeof msg === "string" ? msg : "Click to retry.";
         err.command = { command: "agentstack-mcp.refreshEcosystem", title: "Retry" };
         return [refreshNode, createNode, err];
       }
@@ -212,7 +229,7 @@ export class EcosystemTreeDataProvider implements vscode.TreeDataProvider<Ecosys
       return [refreshNode, createNode, ...projectNodes];
     }
 
-    // Project detail: Summary, Data, Users, Settings
+    // Project detail: Summary, Data, Users, Settings, Scheduler (if allowed), Capabilities
     if (element.nodeKind === "project-detail" && element.projectId !== undefined) {
       const summary = new EcosystemNode("Summary", "summary", vscode.TreeItemCollapsibleState.None, {
         projectId: element.projectId,
@@ -262,8 +279,39 @@ export class EcosystemTreeDataProvider implements vscode.TreeDataProvider<Ecosys
       unselect.command = { command: "agentstack-mcp.unselectProject", title: "Unselect project" };
       unselect.iconPath = new vscode.ThemeIcon("close");
 
+      let schedulerRead = false;
+      if (opts) {
+        let cached = this._schedulerAccessCache.get(element.projectId);
+        if (!cached) {
+          const proj = await fetchProject(opts, element.projectId);
+          if (!("error" in proj)) {
+            const p = proj as { scheduler_read?: boolean; scheduler_write?: boolean };
+            cached = {
+              scheduler_read: p.scheduler_read !== false,
+              scheduler_write: p.scheduler_write !== false,
+            };
+            this._schedulerAccessCache.set(element.projectId, cached);
+          } else {
+            this._schedulerAccessCache.set(element.projectId, { scheduler_read: false, scheduler_write: false });
+          }
+          cached = this._schedulerAccessCache.get(element.projectId);
+        }
+        schedulerRead = cached?.scheduler_read ?? false;
+      }
+
+      const detailNodes: EcosystemNode[] = [summary, data, users, settings];
+      if (schedulerRead) {
+        const schedulerNode = new EcosystemNode("Scheduler", "scheduler", vscode.TreeItemCollapsibleState.Collapsed, {
+          projectId: element.projectId,
+        });
+        schedulerNode.tooltip = "Scheduled tasks. Expand to list; use Chat to create or run.";
+        schedulerNode.iconPath = new vscode.ThemeIcon("watch");
+        detailNodes.push(schedulerNode);
+      }
+      detailNodes.push(capabilities, unselect);
+
       if (!opts) {
-        return [summary, data, users, settings, capabilities, unselect];
+        return detailNodes;
       }
       const statsResult = await fetchProjectStats(opts, element.projectId);
       if (!("error" in statsResult)) {
@@ -273,7 +321,45 @@ export class EcosystemTreeDataProvider implements vscode.TreeDataProvider<Ecosys
         summary.description = `${req} requests, ${buffs} buffs`;
       }
 
-      return [summary, data, users, settings, capabilities, unselect];
+      return detailNodes;
+    }
+
+    // Scheduler: list tasks as children
+    if (element.nodeKind === "scheduler" && element.projectId !== undefined) {
+      if (!opts) {
+        const msg = new EcosystemNode("Set API key to load tasks", "doc", vscode.TreeItemCollapsibleState.None);
+        return [msg];
+      }
+      const listResult = await listSchedulerTasks(opts, element.projectId);
+      if ("error" in listResult) {
+        const errMsg = listResult.error || "Failed to load tasks";
+        const is403 = typeof errMsg === "string" && (errMsg.includes("403") || errMsg.includes("Forbidden") || errMsg.includes("Insufficient"));
+        const errNode = new EcosystemNode(
+          is403 ? "No access to scheduler" : `Error: ${errMsg}`,
+          "doc",
+          vscode.TreeItemCollapsibleState.None
+        );
+        errNode.tooltip = is403 ? "Insufficient permissions for scheduler in this project." : String(errMsg);
+        return [errNode];
+      }
+      const tasks = listResult.tasks ?? [];
+      return tasks.map((t) => {
+        const taskId = (t.id ?? t.task_id ?? "?") as string;
+        const label = (t.name && t.name.trim()) ? t.name : taskId;
+        const node = new EcosystemNode(label, "scheduler-task", vscode.TreeItemCollapsibleState.None, {
+          projectId: element.projectId,
+          taskId,
+        });
+        node.description = t.status ?? "";
+        node.tooltip = `Task: ${taskId}. Use @agentstack in Chat to run or edit.`;
+        node.command = {
+          command: "agentstack-mcp.executeSchedulerTask",
+          title: "Run task",
+          arguments: [element.projectId, taskId],
+        };
+        node.iconPath = new vscode.ThemeIcon("tasklist");
+        return node;
+      });
     }
 
     // Capabilities: Assets (List assets), Buffs, Payments, Rules, 8DNA (links to docs + Chat hint)
@@ -323,7 +409,11 @@ export class EcosystemTreeDataProvider implements vscode.TreeDataProvider<Ecosys
         return [err];
       }
       if ("error" in result) {
-        const err = new EcosystemNode(`Error: ${result.error}`, "doc", vscode.TreeItemCollapsibleState.None);
+        const msg = result.error;
+        const is404 = typeof msg === "string" && (msg.includes("404") || msg.includes("Not found"));
+        const err = new EcosystemNode(is404 ? "Users: not found (404)" : `Error: ${msg}`, "doc", vscode.TreeItemCollapsibleState.None);
+        err.description = is404 ? "Update backend or use MCP v1" : "Retry";
+        err.tooltip = typeof msg === "string" ? msg : "Click to retry.";
         err.command = { command: "agentstack-mcp.refreshEcosystem", title: "Retry" };
         return [err];
       }

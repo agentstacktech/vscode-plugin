@@ -34,8 +34,14 @@ export interface McpClientOptions {
   timeoutMs: number;
 }
 
+/** True when baseUrl is the v2 MCP endpoint (use POST /v2/mcp with steps payload). */
+function isV2BaseUrl(baseUrl: string): boolean {
+  const base = baseUrl.replace(/\/$/, "");
+  return base.endsWith("/v2/mcp");
+}
+
 /**
- * Call MCP tool via POST /tools with JSON-RPC tools/call.
+ * Call MCP tool: v1 = POST baseUrl/tools with JSON-RPC tools/call; v2 = POST baseUrl with { steps }.
  * Returns parsed result content or { error: string }.
  */
 export async function callMcpTool<T = unknown>(
@@ -44,7 +50,20 @@ export async function callMcpTool<T = unknown>(
   args: Record<string, unknown> = {}
 ): Promise<T | McpError> {
   const base = opts.baseUrl.replace(/\/$/, "");
-  const url = `${base}${TOOLS_PATH}`;
+  const useV2 = isV2BaseUrl(opts.baseUrl);
+  // v2: always use trailing slash so POST/GET hit /v2/mcp/ (works even if backend has no no-slash route)
+  const url = useV2 ? `${base}/` : `${base}${TOOLS_PATH}`;
+  const body = useV2
+    ? JSON.stringify({
+        steps: [{ id: "s1", action: toolName, params: args }],
+        options: { stopOnError: true },
+      })
+    : JSON.stringify({
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: toolName, arguments: args },
+        id: `vscode-${toolName.replace(/\./g, "-")}-${Date.now()}`,
+      });
   let res: Response;
   try {
     res = await fetchWithTimeout(
@@ -55,12 +74,7 @@ export async function callMcpTool<T = unknown>(
           "Content-Type": "application/json; charset=utf-8",
           "X-API-Key": opts.apiKey,
         },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          method: "tools/call",
-          params: { name: toolName, arguments: args },
-          id: `vscode-${toolName.replace(/\./g, "-")}-${Date.now()}`,
-        }),
+        body,
       },
       opts.timeoutMs
     );
@@ -78,17 +92,34 @@ export async function callMcpTool<T = unknown>(
       ? "Unauthorized. Set or check your API key (AgentStack: Set API Key)."
       : res.status === 403
         ? "Forbidden. Check project access or subscription (e.g. get_users may require Professional)."
+      : res.status === 404
+        ? "Not found (404). If using MCP v2, ensure the backend is updated; or try disabling Use MCP v2 in settings."
         : `HTTP ${res.status}: ${res.statusText}`;
     return { error: msg };
   }
-  const json = (await res.json()) as {
+  const json = (await res.json()) as Record<string, unknown>;
+
+  if (useV2) {
+    const steps = json.steps as Array<{ status?: string; result?: unknown; error?: string }> | undefined;
+    const step = Array.isArray(steps) && steps.length > 0 ? steps[0] : undefined;
+    const err = (json.error as string) ?? step?.error;
+    if (err || (step && step.status === "error")) {
+      return { error: err || step?.error || "Step failed" };
+    }
+    if (step?.result !== undefined) {
+      return step.result as T;
+    }
+    return { error: "Empty step result from v2 MCP" };
+  }
+
+  const rpc = json as {
     result?: { content?: Array<{ text?: string }>; isError?: boolean };
     error?: { message?: string };
   };
-  if (json.error) {
-    return { error: json.error.message ?? JSON.stringify(json.error) };
+  if (rpc.error) {
+    return { error: rpc.error.message ?? JSON.stringify(rpc.error) };
   }
-  const text = json.result?.content?.[0]?.text;
+  const text = rpc.result?.content?.[0]?.text;
   if (!text) {
     return { error: "Empty response from MCP" };
   }
@@ -397,4 +428,56 @@ export async function logicGet(
   ruleId: string
 ): Promise<LogicRule | McpError> {
   return callMcpTool<LogicRule>(opts, "logic.get", { logic_id: ruleId });
+}
+
+/** List scheduler tasks (scheduler.list_tasks). */
+export async function listSchedulerTasks(
+  opts: McpClientOptions,
+  projectId: number,
+  params?: { name?: string; search?: string }
+): Promise<{ tasks: Array<{ id?: string; task_id?: string; name?: string; status?: string }>; count?: number; project_id?: number } | McpError> {
+  const args: Record<string, unknown> = { project_id: projectId };
+  if (params?.name !== undefined) args.name = params.name;
+  if (params?.search !== undefined) args.search = params.search;
+  const raw = await callMcpTool<{ tasks?: unknown[]; count?: number; project_id?: number }>(
+    opts,
+    "scheduler.list_tasks",
+    args
+  );
+  if ("error" in raw) return raw;
+  const tasks = Array.isArray(raw.tasks) ? raw.tasks : [];
+  return {
+    tasks: tasks as Array<{ id?: string; task_id?: string; name?: string; status?: string }>,
+    count: typeof raw.count === "number" ? raw.count : tasks.length,
+    project_id: raw.project_id,
+  };
+}
+
+/** Create scheduler task (scheduler.create_task). */
+export async function createSchedulerTask(
+  opts: McpClientOptions,
+  projectId: number,
+  body: { name: string; schedule?: string; cron?: string; command?: string; payload?: Record<string, unknown> }
+): Promise<{ task_id?: string; id?: string; [key: string]: unknown } | McpError> {
+  const args: Record<string, unknown> = {
+    project_id: projectId,
+    name: body.name,
+    schedule: body.schedule ?? body.cron ?? "0 * * * *",
+    cron: body.cron ?? body.schedule ?? "0 * * * *",
+    command: body.command ?? "",
+    payload: body.payload ?? {},
+  };
+  return callMcpTool(opts, "scheduler.create_task", args);
+}
+
+/** Execute scheduler task (scheduler.execute_task). */
+export async function executeSchedulerTask(
+  opts: McpClientOptions,
+  projectId: number,
+  taskId: string
+): Promise<{ success?: boolean; task_id?: string; [key: string]: unknown } | McpError> {
+  return callMcpTool(opts, "scheduler.execute_task", {
+    project_id: projectId,
+    task_id: taskId,
+  });
 }
