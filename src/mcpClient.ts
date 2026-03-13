@@ -34,10 +34,10 @@ export interface McpClientOptions {
   timeoutMs: number;
 }
 
-/** True when baseUrl is the v2 MCP endpoint (use POST /v2/mcp with steps payload). */
+/** True when baseUrl is the MCP endpoint (agentstack.execute with steps). */
 function isV2BaseUrl(baseUrl: string): boolean {
   const base = baseUrl.replace(/\/$/, "");
-  return base.endsWith("/v2/mcp");
+  return base.endsWith("/mcp");
 }
 
 /**
@@ -51,7 +51,7 @@ export async function callMcpTool<T = unknown>(
 ): Promise<T | McpError> {
   const base = opts.baseUrl.replace(/\/$/, "");
   const useV2 = isV2BaseUrl(opts.baseUrl);
-  // v2: always use trailing slash so POST/GET hit /v2/mcp/ (works even if backend has no no-slash route)
+  // Use trailing slash so POST hits /mcp/
   const url = useV2 ? `${base}/` : `${base}${TOOLS_PATH}`;
   const body = useV2
     ? JSON.stringify({

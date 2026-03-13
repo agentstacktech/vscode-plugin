@@ -2,7 +2,7 @@
   "name": "agentstack-mcp",
   "displayName": "AgentStack MCP",
   "description": "AgentStack MCP server for VS Code: 8DNA hierarchical data, Rules Engine, Buffs, Payments, 60+ tools (Projects, Auth, Scheduler, Analytics, Webhooks, Notifications, Wallets).",
-  "version": "0.4.51",
+  "version": "0.4.53",
   "publisher": "AgentStack",
   "license": "MIT",
   "repository": "https://github.com/agentstacktech/vscode-plugin",
@@ -310,38 +310,32 @@
         "agentstack-mcp.baseUrl": {
           "type": "string",
           "default": "https://agentstack.tech/mcp",
-          "description": "MCP server base URL. Change only for self-hosted AgentStack.",
+          "description": "MCP server base URL (agentstack.execute, discovery, actions). Change only for self-hosted AgentStack.",
           "order": 2
-        },
-        "agentstack-mcp.useV2McpServer": {
-          "type": "boolean",
-          "default": false,
-          "description": "Use MCP v2 unified entrypoint (agentstack.execute at /v2/mcp) for VS Code MCP server definitions. Recommended when the AI provider limits the number of tools. Does not affect internal REST/MCP calls used by the sidebar.",
-          "order": 3
         },
         "agentstack-mcp.enableChatParticipant": {
           "type": "boolean",
           "default": true,
           "description": "Enable the @agentstack chat participant in Chat (60+ MCP tools).",
-          "order": 4
+          "order": 3
         },
         "agentstack-mcp.requestTimeoutSeconds": {
           "type": "number",
           "default": 60,
           "description": "Request timeout in seconds for MCP/server calls (1–300).",
-          "order": 5
+          "order": 4
         },
         "agentstack-mcp.debugChatResponse": {
           "type": "boolean",
           "default": false,
           "description": "Log chat response path (text vs stream) and first chunk types to Output → AgentStack MCP. Use for debugging garbled output.",
-          "order": 6
+          "order": 5
         },
         "agentstack-mcp.stripKnownArtifacts": {
           "type": "boolean",
           "default": true,
           "description": "Remove known host/tool artifacts from chat output (e.g. projects.get_projects, Tool:, :202--T::Z). Set to false to see raw stream.",
-          "order": 7
+          "order": 6
         }
       }
     },

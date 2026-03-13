@@ -71,7 +71,7 @@ All tools are available in **Chat** when you select the **@agentstack** particip
 
 - **This plugin:** [github.com/agentstacktech/vscode-plugin](https://github.com/agentstacktech/vscode-plugin)
 - **Quick Start (API key):** [MCP_QUICKSTART.md](MCP_QUICKSTART.md)
-- **Plugin ↔ MCP flow (auth, v1/v2, errors):** [docs/PLUGIN_MCP_FLOW.md](docs/PLUGIN_MCP_FLOW.md)
+- **Plugin ↔ MCP flow (auth, client, errors):** [docs/PLUGIN_MCP_FLOW.md](docs/PLUGIN_MCP_FLOW.md)
 - **Full MCP tool list:** [MCP Server Capabilities](https://github.com/agentstacktech/AgentStack/blob/master/docs/MCP_SERVER_CAPABILITIES.md) (AgentStack repo)
 - **Plugins index (Cursor, Claude, GPT, VS Code):** [docs/plugins/README.md](https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/README.md)
 

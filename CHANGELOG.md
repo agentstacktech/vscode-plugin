@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.53]
+
+### Changed
+
+- **MCP profile flow in VS Code** — `@agentstack get profile` in Chat now always goes through the direct MCP path using `auth.get_profile` (no model fallback), and the profile formatter shows only real fields from the backend response.
+- **MCP documentation and context** — Docs and plugin no longer use `v1/v2` terminology; they describe a single current MCP (agentstack.execute, `/mcp`, discovery/actions). Updated `MCP_OVERVIEW.md`, `MCP_CAPABILITY_MAP.md`, `MCP_QUICKSTART.md`, `PLUGIN_MCP_FLOW.md`, and the @agentstack skills/context.
+
+## [0.4.52]
+
+### Changed
+
+- **MCP** — Base URL `https://agentstack.tech/mcp`, agentstack.execute (POST with steps). Removed separate “use V2” setting.
+
 ## [0.4.51] - 2026-03-12
 
 ### Added
@@ -12,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Scheduler in Ecosystem tree** — Under Project detail, **Scheduler** node is shown only when the user has `scheduler_read` (from project permissions). Expanding Scheduler lists tasks via `scheduler.list_tasks`; each task is a node with **Execute** (command or context menu). Errors (e.g. 403) show a clear "Insufficient permissions for scheduler in this project" message.
 - **Scheduler commands** — **AgentStack: List scheduler tasks**, **AgentStack: Create scheduler task**, **AgentStack: Execute scheduler task** (Command Palette and tree context menus). When invoked from the context menu on the Scheduler node or a task node, the command uses the selected node's project (and task ID for Execute) so no manual project selection is needed.
 - **Context menus for Scheduler** — Right-click **Scheduler**: "List scheduler tasks", "Create scheduler task". Right-click a **Scheduler task**: "Execute scheduler task".
-- **Plugin ↔ MCP flow doc** — [docs/PLUGIN_MCP_FLOW.md](docs/PLUGIN_MCP_FLOW.md) describes auth, v1/v2 URLs, client (`callMcpTool`, wrappers), backend routes, scheduler flow example, and error handling. Linked from README.
+- **Plugin ↔ MCP flow doc** — [docs/PLUGIN_MCP_FLOW.md](docs/PLUGIN_MCP_FLOW.md) describes auth, client (`callMcpTool`, wrappers), backend routes, scheduler flow example, and error handling. Linked from README.
 
 ### Changed
 

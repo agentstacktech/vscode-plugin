@@ -33,7 +33,6 @@ const vscodeProposed = (vscode as unknown as ProposedVscodeApi);
 const MCP_PROVIDER_ID = "agentstack";
 const SECRET_KEY = "agentstack.apiKey";
 const DEFAULT_MCP_URI = "https://agentstack.tech/mcp";
-const DEFAULT_MCP_V2_URI = "https://agentstack.tech/v2/mcp";
 const CONNECTED_MESSAGE = "AgentStack connected. 60+ tools available in chat.";
 const OUTPUT_CHANNEL_NAME = "AgentStack MCP";
 
@@ -91,30 +90,6 @@ function getBaseUrl(): string {
   return base || DEFAULT_MCP_URI;
 }
 
-/**
- * Base URI for VS Code MCP server definition.
- * - Uses v1 (/mcp) by default.
- * - When useV2McpServer=true, points to v2 (/v2/mcp) while keeping REST helpers on v1.
- */
-function getMcpServerUri(): string {
-  const cfg = vscode.workspace.getConfiguration("agentstack-mcp");
-  const useV2 = cfg.get<boolean>("useV2McpServer", false);
-  const base = getBaseUrl().replace(/\/$/, "");
-  if (!useV2) {
-    return base;
-  }
-  // If user already pointed baseUrl to /v2/mcp, use it as-is
-  if (base.endsWith("/v2/mcp")) {
-    return base;
-  }
-  // If base ends with /mcp (default cloud), switch to /v2/mcp
-  if (base.endsWith("/mcp")) {
-    return base.replace(/\/mcp$/, "/v2/mcp");
-  }
-  // Otherwise assume v2 is under /v2/mcp on the same host
-  return `${base}/v2/mcp`;
-}
-
 /** Request timeout in ms from settings (default 60s). */
 function getRequestTimeoutMs(): number {
   const cfg = vscode.workspace.getConfiguration("agentstack-mcp");
@@ -122,14 +97,12 @@ function getRequestTimeoutMs(): number {
   return Math.max(1, Math.min(300, sec)) * 1000;
 }
 
-/** MCP client options for tree and commands. Returns null if no API key. Uses v2 baseUrl when useV2McpServer is on so chat/sidebar hit /v2/mcp. */
+/** MCP client options for tree and commands. Returns null if no API key. */
 async function getMcpOptions(context: vscode.ExtensionContext): Promise<McpClientOptions | null> {
   const apiKey = await getApiKey(context);
   if (!apiKey || apiKey.trim() === "") return null;
-  const cfg = vscode.workspace.getConfiguration("agentstack-mcp");
-  const useV2 = cfg.get<boolean>("useV2McpServer", false);
   return {
-    baseUrl: useV2 ? getMcpServerUri() : getBaseUrl(),
+    baseUrl: getBaseUrl(),
     apiKey: apiKey.trim(),
     timeoutMs: getRequestTimeoutMs(),
   };
@@ -636,7 +609,9 @@ function registerChatParticipant(context: vscode.ExtensionContext): boolean {
     }
 
     const isProfileRequest =
-      /get\s+my\s+profile|my\s+profile|(show|display)\s+profile|who\s+am\s+i|профиль|мой\s+профиль/i.test(userPrompt.trim());
+      /\bget\s+my\s+profile\b|\bget\s+profile\b|\bmy\s+profile\b|\b(show|display)\s+profile\b|\bwho\s+am\s+i\b|профиль|мой\s+профиль/i.test(
+        userPrompt.trim()
+      );
 
     if (isProfileRequest) {
       const opts = await getMcpOptions(context);
@@ -1639,7 +1614,7 @@ function activateInner(context: vscode.ExtensionContext): void {
         lm.registerMcpServerDefinitionProvider(MCP_PROVIDER_ID, {
           onDidChangeMcpServerDefinitions: didChangeEmitter.event,
           provideMcpServerDefinitions: async (): Promise<unknown[]> => {
-            const baseUrl = getMcpServerUri();
+            const baseUrl = getBaseUrl();
             return [
               new McpHttp({
                 label: "agentstack",
@@ -1671,7 +1646,7 @@ function activateInner(context: vscode.ExtensionContext): void {
               await context.secrets.store(SECRET_KEY, apiKey.trim());
             }
             const headers = { ...server.headers, "X-API-Key": apiKey! };
-            const uri = typeof server.uri === "string" ? server.uri : getMcpServerUri();
+            const uri = typeof server.uri === "string" ? server.uri : getBaseUrl();
             const version = typeof server.version === "string" ? server.version : "0.1.0";
             return new McpHttp({ label: server.label, uri, headers, version });
           },
