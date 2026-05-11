@@ -2,7 +2,7 @@
   "name": "agentstack-mcp",
   "displayName": "AgentStack MCP",
   "description": "AgentStack MCP server for VS Code: 8DNA hierarchical data, Rules Engine, Buffs, Payments, and one tool (agentstack.execute) backed by the live AgentStack action catalog.",
-  "version": "0.4.53",
+  "version": "0.4.54",
   "publisher": "AgentStack",
   "license": "MIT",
   "repository": "https://github.com/agentstacktech/vscode-plugin",

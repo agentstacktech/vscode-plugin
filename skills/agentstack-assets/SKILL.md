@@ -23,7 +23,7 @@ Enables managing **assets** (inventory, digital goods, catalog) via MCP tools un
 | `assets.update` | Update asset. |
 | `assets.delete` | Delete asset. |
 
-Full parameters: **CAPABILITY_MATRIX** (`docs/plugins/CAPABILITY_MATRIX.md`) or `GET /mcp/actions`. Use with wallets.* and buffs.* for purchase and effects.
+Full parameters: **MCP_CAPABILITY_MATRIX** (`docs/MCP_CAPABILITY_MATRIX.md`) or `GET /mcp/actions`. Use with wallets.* and buffs.* for purchase and effects.
 
 ## Instructions
 
@@ -39,5 +39,5 @@ Full parameters: **CAPABILITY_MATRIX** (`docs/plugins/CAPABILITY_MATRIX.md`) or 
 
 ## References
 
-- **CAPABILITY_MATRIX** — repo docs/plugins/CAPABILITY_MATRIX.md (assets.*).
+- **MCP_CAPABILITY_MATRIX** — repo docs/MCP_CAPABILITY_MATRIX.md (assets.*).
 - **CONTEXT_FOR_AI** — repo docs/plugins/CONTEXT_FOR_AI.md (domain map).

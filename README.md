@@ -26,7 +26,7 @@ All actions are available in **Chat** when you select the **@agentstack** partic
 | **Auth** | "Get my profile", "Quick auth with email" |
 | **Scheduler, Analytics, Webhooks, Notifications, Wallets** | "Schedule a task", "Get analytics", "List webhooks" |
 
-**Full tool list and parameters:** [Capability Matrix](https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/CAPABILITY_MATRIX.md), generated from `GET /mcp/actions`.
+**Full tool list and parameters:** [Capability Matrix](https://github.com/agentstacktech/AgentStack/blob/master/docs/MCP_CAPABILITY_MATRIX.md), generated from `GET /mcp/actions`.
 
 **After creating a project:** The API key is saved in the extension and used automatically. To copy it elsewhere, run **AgentStack: Set API Key** (paste the same key) or **AgentStack: Show API key & project info** (preview and copy).
 
@@ -73,7 +73,7 @@ All actions are available in **Chat** when you select the **@agentstack** partic
 - **This plugin:** [github.com/agentstacktech/vscode-plugin](https://github.com/agentstacktech/vscode-plugin)
 - **Quick Start (API key):** [MCP_QUICKSTART.md](MCP_QUICKSTART.md)
 - **Plugin ↔ MCP flow (auth, client, errors):** [docs/PLUGIN_MCP_FLOW.md](docs/PLUGIN_MCP_FLOW.md)
-- **Full MCP tool list:** [Capability Matrix](https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/CAPABILITY_MATRIX.md) (generated from live MCP actions)
+- **Full MCP tool list:** [Capability Matrix](https://github.com/agentstacktech/AgentStack/blob/master/docs/MCP_CAPABILITY_MATRIX.md) (generated from live MCP actions)
 - **Plugins index (Cursor, Claude, GPT, VS Code):** [docs/plugins/README.md](https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/README.md)
 
 ## Links

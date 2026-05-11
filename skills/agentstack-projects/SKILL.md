@@ -29,7 +29,7 @@ Enables creating and managing AgentStack projects and API keys from VS Code chat
 | `apikeys.list` / `apikeys.create` / `apikeys.delete` | List, create, or delete API keys. |
 | `projects.get_activity` | Get project activity log; use `limit` for pagination. |
 
-Full list and parameters: generated `docs/plugins/CAPABILITY_MATRIX.md` or `GET /mcp/actions`.
+Full list and parameters: generated `docs/MCP_CAPABILITY_MATRIX.md` or `GET /mcp/actions`.
 
 ## Instructions
 

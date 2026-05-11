@@ -28,7 +28,7 @@ const OUTPUT_CHANNEL_NAME = "AgentStack MCP";
 /** Base URL for AgentStack docs (plugins index, MCP capabilities). Canonical: agentstacktech/AgentStack, branch master. */
 const DOCS_BASE = "https://github.com/agentstacktech/AgentStack/blob/master";
 const DOCS_PLUGINS_INDEX = "https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/README.md";
-const DOCS_MCP_CAPABILITIES = `${DOCS_BASE}/docs/plugins/CAPABILITY_MATRIX.md`;
+const DOCS_MCP_CAPABILITIES = `${DOCS_BASE}/docs/MCP_CAPABILITY_MATRIX.md`;
 const DOCS_DNA_KEY_VALUE = `${DOCS_BASE}/docs/architecture/DNA_KEY_VALUE_API.md`;
 
 let outputChannel: vscode.OutputChannel | undefined;

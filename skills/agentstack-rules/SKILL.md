@@ -23,7 +23,7 @@ Enables creating and managing **rules** (when/then, triggers) via MCP tools unde
 | `logic.update` | Update a rule. |
 | `logic.delete` | Delete a rule. |
 
-Actions can call other MCP tools (e.g. `buffs.apply_temporary_effect`, `wallets.credit`). Full parameters: **CAPABILITY_MATRIX** (`docs/plugins/CAPABILITY_MATRIX.md`) or `GET /mcp/actions`.
+Actions can call other MCP tools (e.g. `buffs.apply_temporary_effect`, `wallets.credit`). Full parameters: **MCP_CAPABILITY_MATRIX** (`docs/MCP_CAPABILITY_MATRIX.md`) or `GET /mcp/actions`.
 
 ## Instructions
 
@@ -39,5 +39,5 @@ Actions can call other MCP tools (e.g. `buffs.apply_temporary_effect`, `wallets.
 
 ## References
 
-- **CAPABILITY_MATRIX** — repo docs/plugins/CAPABILITY_MATRIX.md (logic.*, rules.*).
+- **MCP_CAPABILITY_MATRIX** — repo docs/MCP_CAPABILITY_MATRIX.md (logic.*, rules.*).
 - **CONTEXT_FOR_AI** — repo docs/plugins/CONTEXT_FOR_AI.md (domain map).

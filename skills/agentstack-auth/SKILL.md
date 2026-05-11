@@ -23,7 +23,7 @@ Enables **authentication and profile** via MCP tools under `auth.*`: login, regi
 | `auth.update_profile` | Update profile data. |
 | (Session/token tools as in CAPABILITY_MATRIX) | Session management. |
 
-Full list and parameters: **CAPABILITY_MATRIX** (`docs/plugins/CAPABILITY_MATRIX.md`) or `GET /mcp/actions`.
+Full list and parameters: **MCP_CAPABILITY_MATRIX** (`docs/MCP_CAPABILITY_MATRIX.md`) or `GET /mcp/actions`.
 
 ## Instructions
 
@@ -41,5 +41,5 @@ Full list and parameters: **CAPABILITY_MATRIX** (`docs/plugins/CAPABILITY_MATRIX
 
 ## References
 
-- **CAPABILITY_MATRIX** — repo docs/plugins/CAPABILITY_MATRIX.md (auth.*).
+- **MCP_CAPABILITY_MATRIX** — repo docs/MCP_CAPABILITY_MATRIX.md (auth.*).
 - **CONTEXT_FOR_AI** — repo docs/plugins/CONTEXT_FOR_AI.md (Auth domain). For roles → RBAC.

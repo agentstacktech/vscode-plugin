@@ -47,7 +47,7 @@ If the agent calls MCP tools and returns a sensible answer — the extension and
 | MCP server does not appear | Marketplace build does not use proposed server registration; use @agentstack/sidebar or manual MCP setup from `MCP_QUICKSTART.md`. |
 | API key prompt does not appear | Run **AgentStack: Sign in with Device Code** or **AgentStack: Set API Key** manually. |
 | 401 / 403 on calls | Key is valid; some operations require a subscription. |
-| "Tool not found" | Tool name matches the generated capability matrix (e.g. `projects.create_project_anonymous`). List: [Capability Matrix](https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/CAPABILITY_MATRIX.md). |
+| "Tool not found" | Tool name matches the generated capability matrix (e.g. `projects.create_project_anonymous`). List: [Capability Matrix](https://github.com/agentstacktech/AgentStack/blob/master/docs/MCP_CAPABILITY_MATRIX.md). |
 
 ---
 
@@ -75,7 +75,7 @@ The extension uses direct API/MCP calls for sidebar and chat helper paths; **Age
 - **Analytics:** usage, metrics.
 - **API keys, Webhooks, notifications, wallets** — as implemented on backend and in MCP.
 
-Full tool list and parameters: [CAPABILITY_MATRIX](https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/CAPABILITY_MATRIX.md), generated from `GET /mcp/actions`.
+Full tool list and parameters: [MCP_CAPABILITY_MATRIX](https://github.com/agentstacktech/AgentStack/blob/master/docs/MCP_CAPABILITY_MATRIX.md), generated from `GET /mcp/actions`.
 
 ### Summary
 

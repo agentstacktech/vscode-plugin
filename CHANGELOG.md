@@ -108,7 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - MCP availability — connection and display of tools in chat.
 - **AgentStack: Open documentation** — command opens the correct plugins index link: `https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/README.md`
-- **Doc links** — All AgentStack repo doc links now use `blob/master` (e.g. MCP_SERVER_CAPABILITIES.md, plugins/README.md, DNA_KEY_VALUE_API.md) in extension, tree, README, TESTING_AND_CAPABILITIES, MCP_QUICKSTART, CHANGELOG.
+- **Doc links** — All AgentStack repo doc links now use `blob/master` (e.g. MCP_CAPABILITY_MATRIX.md, plugins/README.md, DNA_KEY_VALUE_API.md) in extension, tree, README, TESTING_AND_CAPABILITIES, MCP_QUICKSTART, CHANGELOG.
 
 ## [0.4.37] - 2026-03-11
 
@@ -116,7 +116,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Repository links updated across the plugin (README, MCP_QUICKSTART, TESTING_AND_CAPABILITIES, extension).
 - Documentation fixes.
-- GitHub doc links corrected to use `master` branch (AgentStack repo: MCP_SERVER_CAPABILITIES, plugins/README.md).
+- GitHub doc links corrected to use `master` branch (AgentStack repo: MCP_CAPABILITY_MATRIX, plugins/README.md).
 
 ## [0.4.35] - 2026-03-10
 
@@ -132,7 +132,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Ecosystem view** — AgentStack sidebar in the activity bar: connection status (Connected / Set API key), domain map (Projects, 8DNA, Rules Engine, Buffs, Payments, Auth, RBAC, Assets, Scheduler, Analytics, Webhooks, Notifications), and "Same MCP: Cursor, Claude, GPT". Click a domain or "Other plugins" to open the corresponding doc link.
 - **Status bar** — Shows "AgentStack (project X)" when connected or "AgentStack: Set API key"; click to set key or open API key & project info.
 - **AgentStack: Open documentation** — Command Palette command opens the Plugins index (docs/plugins/README.md) in the browser.
-- **Chat skills** — Five new skills for @agentstack: Rules Engine (logic.*, rules.*), Assets (assets.*), RBAC (roles, projects.get_users, update_user_role), Payments (payments.*, wallets.*), Auth (auth.*). Total 8 skills; each links to MCP_SERVER_CAPABILITIES.
+- **Chat skills** — Five new skills for @agentstack: Rules Engine (logic.*, rules.*), Assets (assets.*), RBAC (roles, projects.get_users, update_user_role), Payments (payments.*, wallets.*), Auth (auth.*). Total 8 skills; each links to MCP_CAPABILITY_MATRIX.
 
 ### Changed
 

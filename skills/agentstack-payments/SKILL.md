@@ -23,7 +23,7 @@ Enables **payments and wallets** via MCP tools under `payments.*` and `wallets.*
 | `payments.get_balance` | Get ecosystem balance. |
 | `payments.list_transactions` | List payment transactions. |
 
-Full list and parameters: generated **CAPABILITY_MATRIX** (`docs/plugins/CAPABILITY_MATRIX.md`) or `GET /mcp/actions`. Payment gateway and providers: see repo PAYMENT_GATEWAY docs.
+Full list and parameters: generated **MCP_CAPABILITY_MATRIX** (`docs/MCP_CAPABILITY_MATRIX.md`) or `GET /mcp/actions`. Payment gateway and providers: see repo PAYMENT_GATEWAY docs.
 
 ## Instructions
 
@@ -40,5 +40,5 @@ Full list and parameters: generated **CAPABILITY_MATRIX** (`docs/plugins/CAPABIL
 
 ## References
 
-- **CAPABILITY_MATRIX** — repo docs/plugins/CAPABILITY_MATRIX.md (payments.*, wallets.*).
+- **MCP_CAPABILITY_MATRIX** — repo docs/MCP_CAPABILITY_MATRIX.md (payments.*, wallets.*).
 - **CONTEXT_FOR_AI** — repo docs/plugins/CONTEXT_FOR_AI.md (Payments domain).
