@@ -34,6 +34,14 @@ export interface McpClientOptions {
   timeoutMs: number;
 }
 
+function authHeaders(credential: string): Record<string, string> {
+  const trimmed = credential.trim();
+  if (trimmed.startsWith("Bearer ")) {
+    return { Authorization: trimmed };
+  }
+  return { "X-API-Key": trimmed };
+}
+
 /** True when baseUrl is the MCP endpoint (agentstack.execute with steps). */
 function isV2BaseUrl(baseUrl: string): boolean {
   const base = baseUrl.replace(/\/$/, "");
@@ -72,7 +80,7 @@ export async function callMcpTool<T = unknown>(
         method: "POST",
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          "X-API-Key": opts.apiKey,
+          ...authHeaders(opts.apiKey),
         },
         body,
       },

@@ -26,10 +26,10 @@ Enables creating and managing AgentStack projects and API keys from VS Code chat
 | `projects.get_stats` | Project statistics (usage, users, activity). |
 | `projects.get_users` | List users in the project. |
 | `projects.attach_to_user` | Attach anonymous project to a user; pass `auth_key` from anonymous creation. |
-| `projects.get_api_keys` / `projects.create_api_key` / `projects.delete_api_key` | List, create, or revoke API keys. |
+| `apikeys.list` / `apikeys.create` / `apikeys.delete` | List, create, or delete API keys. |
 | `projects.get_activity` | Get project activity log; use `limit` for pagination. |
 
-Full list: repo docs/MCP_SERVER_CAPABILITIES.md.
+Full list and parameters: generated `docs/plugins/CAPABILITY_MATRIX.md` or `GET /mcp/actions`.
 
 ## Instructions
 

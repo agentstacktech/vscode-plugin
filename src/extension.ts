@@ -7,39 +7,28 @@ import {
 } from "./ecosystemTree";
 import { fetchProjects, fetchProject, fetchProjectStats, fetchProjectUsers, fetchAssetsList, updateProject, listActiveBuffs, getBalance, getProfile, logicList, listTransactions, listSchedulerTasks, createSchedulerTask, executeSchedulerTask } from "./mcpClient";
 import type { McpClientOptions } from "./mcpClient";
+import { SECRET_KEY, getApiKey, getBaseUrl, getMcpOptions, getRequestTimeoutMs, keyPreview } from "./auth";
+import { AGENTSTACK_SKILLS_CONTEXT } from "./capabilityCatalog";
+import { signInWithDeviceCode } from "./oauthDeviceCode";
 
-/** Proposed VS Code API (chat, lm, MCP) — not yet in @types/vscode. Cast used only where needed. */
+/** Chat/LM host APIs can lag in @types/vscode; casts stay isolated here. */
 interface ProposedVscodeApi {
   chat?: { createChatParticipant?: (id: string, handler: vscode.ChatRequestHandler) => unknown };
   lm?: {
-    registerMcpServerDefinitionProvider?: (id: string, provider: unknown) => vscode.Disposable;
     selectChatModels?: (selector?: unknown) => Promise<vscode.LanguageModelChat[]>;
   };
   LanguageModelTextPart?: new (value: string) => { value: string };
-  McpHttpServerDefinition?: new (opts: { label: string; uri: string; headers: Record<string, string>; version: string }) => unknown;
-}
-
-/** Minimal shape for MCP server definition passed to resolveMcpServerDefinition (proposed API). */
-interface McpServerDefinitionInput {
-  label: string;
-  uri?: string;
-  headers?: Record<string, string>;
-  version?: string;
-  [key: string]: unknown;
 }
 
 const vscodeProposed = (vscode as unknown as ProposedVscodeApi);
 
-const MCP_PROVIDER_ID = "agentstack";
-const SECRET_KEY = "agentstack.apiKey";
-const DEFAULT_MCP_URI = "https://agentstack.tech/mcp";
-const CONNECTED_MESSAGE = "AgentStack connected. 60+ tools available in chat.";
+const CONNECTED_MESSAGE = "AgentStack connected. Live actions available in chat (agentstack.execute).";
 const OUTPUT_CHANNEL_NAME = "AgentStack MCP";
 
 /** Base URL for AgentStack docs (plugins index, MCP capabilities). Canonical: agentstacktech/AgentStack, branch master. */
 const DOCS_BASE = "https://github.com/agentstacktech/AgentStack/blob/master";
 const DOCS_PLUGINS_INDEX = "https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/README.md";
-const DOCS_MCP_CAPABILITIES = `${DOCS_BASE}/docs/MCP_SERVER_CAPABILITIES.md`;
+const DOCS_MCP_CAPABILITIES = `${DOCS_BASE}/docs/plugins/CAPABILITY_MATRIX.md`;
 const DOCS_DNA_KEY_VALUE = `${DOCS_BASE}/docs/architecture/DNA_KEY_VALUE_API.md`;
 
 let outputChannel: vscode.OutputChannel | undefined;
@@ -56,22 +45,6 @@ function logActivationError(err: unknown): void {
   }
 }
 
-/** Short skills context for @agentstack chat participant (when to use which MCP tools). */
-const AGENTSTACK_SKILLS_CONTEXT = `You are the AgentStack expert. AgentStack is a full backend with 60+ MCP tools. Use the available MCP tools when the user asks to:
-- Create or list projects, get API keys, project stats → projects.create_project_anonymous, projects.get_projects, projects.get_stats, projects.get_project
-- Store or read data (database-like) → 8DNA: project.data, user.data; use commands.execute or project API
-- Rules / automation → logic.*, rules.*
-- Trials, subscriptions, effects → buffs.create_buff, buffs.apply_buff, buffs.list_active_buffs
-- Payments → payments.*, wallets.* (ecosystem wallet = real money; use payments.get_balance). In-app/project currencies = assets with type "currency" (assets.list with type filter).
-- Auth → auth.get_profile, auth.quick_auth
-- Scheduler, analytics, webhooks, notifications → scheduler.*, analytics.*, webhooks.*, notifications.*
-WRITE OPERATIONS (must use MCP only; reply = only tool result): Creating/updating assets → assets.create, assets.update. Applying buffs → buffs.apply_buff. Adding/removing users or changing roles → use projects.add_user, projects.remove_user, projects.update_user_role when available. Updating project or user data → projects.update_project (field data), commands.execute. Creating/updating/deleting rules → logic.create, logic.update, logic.delete. Payments/refunds → payments.create, payments.refund. For any of these: perform the operation ONLY by calling the corresponding MCP tool; in your reply show ONLY the result of that call (success, error message, or returned data). Do not invent or show example outcomes.
-ECOSYSTEM DATA = NO GENERATION: All responses that return ecosystem data (projects, users, stats, profile, assets, buffs, balance, currencies, rules, transactions, etc.) must use ONLY the actual MCP tool result—never generate, invent, or substitute example data. The plugin handles many read paths directly (list projects, get stats, list users, project details, list assets, list buffs, get balance, list currencies, list rules, get profile, list transactions). If the user asks for any other read-like data, you MUST call the corresponding MCP tool and output ONLY the tool result (success, error, or returned data). Do not add fictional IDs, names, or placeholder content.
-DATA RULE (all tools): For EVERY AgentStack tool response use ONLY the exact data returned by the tool. Never invent or use example/placeholder data. If a tool returns empty or error, say so clearly; do not substitute demo data. Real IDs are numeric; never use placeholders like proj_1, user_123, or example names like "Demo Project".
-When listing projects: reply only in natural language. Use a short bullet or numbered list: one line per project with name, ID, and one line of stats (e.g. "X requests, Y active buffs"). Do not output JSON, field names alone, or raw tool output.
-CHAT CONTEXT: For "list users", "get my users", "project users", "list assets", "list rules", "get balance", etc., the plugin may have already resolved the project (selected or first in list). If the user asks for users/assets/rules/stats and you have project_id in context, use it directly; do not say "no projects found" if the plugin or a previous step already provided project context.
-CRITICAL: Your reply is shown directly to the user. Do not output your planning, reasoning, or step-by-step thoughts. Reply only with the final answer to the user. Use natural language in full sentences. You MAY use Markdown for readability: **bold**, bullet or numbered lists, line breaks. Do NOT include: tool names (e.g. projects_projects or projects.get_projects), "call ..." with a tool name, JSON, payloads, curly braces, or raw field lists. Do not output truncated dates or field labels alone. Format lists with Markdown bullets or numbers.`;
-
 /** Decode binary chunk as UTF-8 or UTF-16 (if BOM present); avoids wrong encoding if host sent bytes. */
 function decodeStreamBytes(value: ArrayBufferView | ArrayBuffer): string {
   const bytes = value instanceof ArrayBuffer ? new Uint8Array(value) : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
@@ -82,30 +55,6 @@ function decodeStreamBytes(value: ArrayBufferView | ArrayBuffer): string {
     if (b0 === 0xfe && b1 === 0xff) return new TextDecoder("utf-16be", { fatal: false }).decode(bytes.subarray(2));
   }
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-}
-
-function getBaseUrl(): string {
-  const cfg = vscode.workspace.getConfiguration("agentstack-mcp");
-  const base = cfg.get<string>("baseUrl", "").trim();
-  return base || DEFAULT_MCP_URI;
-}
-
-/** Request timeout in ms from settings (default 60s). */
-function getRequestTimeoutMs(): number {
-  const cfg = vscode.workspace.getConfiguration("agentstack-mcp");
-  const sec = cfg.get<number>("requestTimeoutSeconds", 60);
-  return Math.max(1, Math.min(300, sec)) * 1000;
-}
-
-/** MCP client options for tree and commands. Returns null if no API key. */
-async function getMcpOptions(context: vscode.ExtensionContext): Promise<McpClientOptions | null> {
-  const apiKey = await getApiKey(context);
-  if (!apiKey || apiKey.trim() === "") return null;
-  return {
-    baseUrl: getBaseUrl(),
-    apiKey: apiKey.trim(),
-    timeoutMs: getRequestTimeoutMs(),
-  };
 }
 
 /** Resolve project for chat: use selected project or first project from API. Returns projectId + optional hint that first was used. */
@@ -145,25 +94,6 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   } finally {
     clearTimeout(t);
   }
-}
-
-/**
- * Get API key: from settings (apiKey) if set, otherwise from SecretStorage.
- * Used for MCP, chat participant, and tree views.
- */
-async function getApiKey(context: vscode.ExtensionContext): Promise<string | undefined> {
-  const cfg = vscode.workspace.getConfiguration("agentstack-mcp");
-  const fromSettings = cfg.get<string>("apiKey", "");
-  if (fromSettings && fromSettings.trim() !== "") {
-    return fromSettings.trim();
-  }
-  return context.secrets.get(SECRET_KEY);
-}
-
-/** Key preview for display (e.g. anon_ask_xxxx…xxxx). */
-function keyPreview(key: string): string {
-  if (key.length <= 12) return key.slice(0, 4) + "…";
-  return key.slice(0, 8) + "…" + key.slice(-4);
 }
 
 /**
@@ -989,14 +919,14 @@ function activateInner(context: vscode.ExtensionContext): void {
             : `$(database) AgentStack (project ${projectId})`
           : "";
       statusBarItem.text = hasKey
-        ? (projectId !== undefined ? projectLabel : "$(database) AgentStack")
-        : "$(database) AgentStack: Set API key";
+        ? (projectId !== undefined ? projectLabel : "$(database) AgentStack: Connected")
+        : "$(database) AgentStack: Sign in";
       statusBarItem.tooltip = hasKey
         ? projectId !== undefined
-          ? "AgentStack connected. Click: API key & project info. Copy project ID: right-click project in tree → Copy project ID."
-          : "AgentStack connected. Click for API key & project info."
-        : "Click to set API key.";
-      statusBarItem.command = hasKey ? "agentstack-mcp.showApiKeyAndProjectInfo" : "agentstack-mcp.setApiKey";
+          ? "AgentStack connected. Click for credential/project info, or run AgentStack: Switch project."
+          : "AgentStack connected. Click for credential info, or run AgentStack: Switch project."
+        : "Click to sign in with Device Code. API key fallback is available from the Command Palette.";
+      statusBarItem.command = hasKey ? "agentstack-mcp.showApiKeyAndProjectInfo" : "agentstack-mcp.signIn";
       statusBarItem.show();
     }
   };
@@ -1045,6 +975,53 @@ function activateInner(context: vscode.ExtensionContext): void {
       await context.globalState.update(SELECTED_PROJECT_NAME_KEY, undefined);
       didChangeEmitter.fire();
       void vscode.window.showInformationMessage("Project unselected.");
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.switchProject", async () => {
+      const opts = await getMcpOptions(context);
+      if (!opts) {
+        void vscode.window.showInformationMessage("Sign in or set an AgentStack API key first.", "Sign in").then((choice) => {
+          if (choice === "Sign in") void vscode.commands.executeCommand("agentstack-mcp.signIn");
+        });
+        return;
+      }
+      const result = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: "Loading AgentStack projects...", cancellable: false },
+        () => fetchProjects(opts)
+      );
+      if ("error" in result) {
+        void vscode.window.showErrorMessage(`AgentStack: ${result.error}`);
+        return;
+      }
+      const picks = result.projects
+        .filter((project) => !isPlaceholderProject(project))
+        .map((project) => {
+          const rawId = project.project_id ?? project.id;
+          return {
+            label: project.name || `Project ${rawId}`,
+            description: rawId !== undefined ? `ID ${rawId}` : undefined,
+            projectId: typeof rawId === "number" ? rawId : undefined,
+            projectName: project.name,
+          };
+        })
+        .filter((pick) => pick.projectId !== undefined);
+      if (picks.length === 0) {
+        void vscode.window.showInformationMessage("No AgentStack projects found for this credential.");
+        return;
+      }
+      const picked = await vscode.window.showQuickPick(picks, {
+        title: "AgentStack: Switch project",
+        placeHolder: "Choose the project used by sidebar commands and @agentstack context",
+      });
+      if (!picked || picked.projectId === undefined) return;
+      await context.globalState.update(SELECTED_PROJECT_KEY, picked.projectId);
+      await context.globalState.update(SELECTED_PROJECT_NAME_KEY, picked.projectName);
+      await context.globalState.update("agentstack.lastProjectId", picked.projectId);
+      didChangeEmitter.fire();
+      void updateEcosystemAndStatusBar();
+      void vscode.window.showInformationMessage(`AgentStack project selected: ${picked.label}`);
     })
   );
 
@@ -1599,105 +1576,28 @@ function activateInner(context: vscode.ExtensionContext): void {
     })
   );
 
-  function registerMcpProvider(): boolean {
-    const vscodeAny = vscode as unknown as Record<string, unknown>;
-    const lm = (vscodeAny.lm ?? vscodeProposed.lm) as { registerMcpServerDefinitionProvider?: (id: string, provider: unknown) => vscode.Disposable } | undefined;
-    const McpHttp =
-      (vscodeAny.McpHttpServerDefinition ?? (vscodeAny.lm as Record<string, unknown> | undefined)?.McpHttpServerDefinition ?? vscodeProposed.McpHttpServerDefinition) as
-        | (new (opts: { label: string; uri: string; headers: Record<string, string>; version: string }) => unknown)
-        | undefined;
-    if (typeof lm?.registerMcpServerDefinitionProvider !== "function" || typeof McpHttp !== "function") {
-      return false;
-    }
-    try {
-      context.subscriptions.push(
-        lm.registerMcpServerDefinitionProvider(MCP_PROVIDER_ID, {
-          onDidChangeMcpServerDefinitions: didChangeEmitter.event,
-          provideMcpServerDefinitions: async (): Promise<unknown[]> => {
-            const baseUrl = getBaseUrl();
-            return [
-              new McpHttp({
-                label: "agentstack",
-                uri: baseUrl,
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-API-Key": "",
-                },
-                version: "0.1.0",
-              }),
-            ];
-          },
-          resolveMcpServerDefinition: async (server: McpServerDefinitionInput): Promise<unknown> => {
-            if (server.label !== "agentstack") {
-              return server;
-            }
-            let apiKey = await getApiKey(context);
-            if (!apiKey || apiKey.trim() === "") {
-              apiKey = await vscode.window.showInputBox({
-                title: "AgentStack MCP",
-                prompt: "Enter your AgentStack API key (from agentstack.tech or use command: AgentStack: Create project and get API key).",
-                placeHolder: "Your API key",
-                password: true,
-                ignoreFocusOut: true,
-              });
-              if (!apiKey || apiKey.trim() === "") {
-                return undefined;
-              }
-              await context.secrets.store(SECRET_KEY, apiKey.trim());
-            }
-            const headers = { ...server.headers, "X-API-Key": apiKey! };
-            const uri = typeof server.uri === "string" ? server.uri : getBaseUrl();
-            const version = typeof server.version === "string" ? server.version : "0.1.0";
-            return new McpHttp({ label: server.label, uri, headers, version });
-          },
-        })
-      );
-      if (outputChannel) outputChannel.appendLine("MCP server provider registered; AgentStack appears in Chat when you use @agentstack.");
-      didChangeEmitter.fire();
-      return true;
-    } catch (err) {
-      logActivationError(err);
-      return false;
-    }
-  }
-
-  const mcpRetryDelaysMs = [0, 500, 1500, 3000, 5000, 10000, 20000];
-  const mcpTimeouts: NodeJS.Timeout[] = [];
-  let mcpRegistered = false;
-  const tryRegisterMcp = (): boolean => {
-    const ok = registerMcpProvider();
-    if (ok) {
-      mcpRegistered = true;
-      mcpTimeouts.forEach((t) => clearTimeout(t));
-      mcpTimeouts.length = 0;
-    }
-    return ok;
-  };
-  if (!tryRegisterMcp()) {
-    mcpRetryDelaysMs.slice(1).forEach((ms) =>
-      mcpTimeouts.push(
-        setTimeout(() => {
-          if (tryRegisterMcp() && outputChannel) {
-            outputChannel.appendLine("AgentStack MCP: server provider registered (delayed). Use @agentstack in Chat for 60+ tools.");
-          }
-        }, ms)
-      )
-    );
-    context.subscriptions.push({
-      dispose: () => mcpTimeouts.forEach((t) => clearTimeout(t)),
-    });
-    mcpTimeouts.push(
-      setTimeout(() => {
-        if (!mcpRegistered && outputChannel) {
-          outputChannel.appendLine(
-            "AgentStack MCP: server list provider not available (VS Code 1.101+ and Copilot/agent feature required). Use @agentstack in Chat for tools."
-          );
-        }
-      }, 25000)
+  if (outputChannel) {
+    outputChannel.appendLine(
+      "AgentStack MCP: Marketplace build uses stable VS Code APIs. Use @agentstack, the sidebar commands, or MCP_QUICKSTART.md for manual MCP server setup."
     );
   }
 
   const tryRegisterChat = () => registerChatParticipant(context);
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentstack-mcp.signIn", async () => {
+      tryRegisterChat();
+      try {
+        const traceId = await signInWithDeviceCode(context);
+        outputChannel?.appendLine(`[auth] Device Code sign-in completed. trace=${traceId}`);
+        didChangeEmitter.fire();
+        void updateEcosystemAndStatusBar();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        void vscode.window.showErrorMessage(`AgentStack sign-in failed: ${message}`);
+      }
+    })
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand("agentstack-mcp.setApiKey", async () => {
@@ -1779,10 +1679,13 @@ function activateInner(context: vscode.ExtensionContext): void {
       const apiKey = await getApiKey(context);
       if (!apiKey || apiKey.trim() === "") {
         void vscode.window.showInformationMessage(
-          "No API key set. Run **AgentStack: Set API Key** or **AgentStack: Create project and get API key**.",
+          "No AgentStack credential set. Run Device Code sign-in or set an API key fallback.",
+          "Sign in",
           "Set API Key"
         ).then((choice) => {
-          if (choice === "Set API Key") {
+          if (choice === "Sign in") {
+            void vscode.commands.executeCommand("agentstack-mcp.signIn");
+          } else if (choice === "Set API Key") {
             void vscode.commands.executeCommand("agentstack-mcp.setApiKey");
           }
         });
@@ -1792,18 +1695,18 @@ function activateInner(context: vscode.ExtensionContext): void {
         context.globalState.get<number | undefined>(SELECTED_PROJECT_KEY) ??
         context.globalState.get<number | undefined>("agentstack.lastProjectId");
       const lines = [
-        "**AgentStack API key & project**",
+        "**AgentStack credential & project**",
         "",
         projectId !== undefined ? `Project ID: ${projectId}` : "Project ID: (unknown — create a project or select one in Ecosystem)",
-        `Key preview: \`${keyPreview(apiKey)}\``,
+        `Credential preview: \`${keyPreview(apiKey)}\``,
         "",
-        "Use **@agentstack** in Chat for 60+ MCP tools. Full tool list: see extension README.",
+        "Use **@agentstack** in Chat for `agentstack.execute` with live action discovery. Full actions list: see extension README.",
       ];
       const msg = lines.join("\n");
-      const choice = await vscode.window.showInformationMessage(msg, "Copy full key");
-      if (choice === "Copy full key") {
+      const choice = await vscode.window.showInformationMessage(msg, "Copy credential");
+      if (choice === "Copy credential") {
         await vscode.env.clipboard.writeText(apiKey);
-        void vscode.window.showInformationMessage("API key copied to clipboard.");
+        void vscode.window.showInformationMessage("AgentStack credential copied to clipboard.");
       }
     })
   );

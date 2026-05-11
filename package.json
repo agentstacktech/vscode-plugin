@@ -1,7 +1,7 @@
 {
   "name": "agentstack-mcp",
   "displayName": "AgentStack MCP",
-  "description": "AgentStack MCP server for VS Code: 8DNA hierarchical data, Rules Engine, Buffs, Payments, 60+ tools (Projects, Auth, Scheduler, Analytics, Webhooks, Notifications, Wallets).",
+  "description": "AgentStack MCP server for VS Code: 8DNA hierarchical data, Rules Engine, Buffs, Payments, and one tool (agentstack.execute) backed by the live AgentStack action catalog.",
   "version": "0.4.53",
   "publisher": "AgentStack",
   "license": "MIT",
@@ -11,9 +11,6 @@
   "engines": {
     "vscode": "^1.101.0"
   },
-  "enabledApiProposals": [
-    "mcpServerDefinitions"
-  ],
   "categories": [
     "Other"
   ],
@@ -31,12 +28,14 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "onStartupFinished",
+    "onCommand:agentstack-mcp.signIn",
     "onCommand:agentstack-mcp.setApiKey",
     "onCommand:agentstack-mcp.createProjectAndGetKey",
     "onCommand:agentstack-mcp.showApiKeyAndProjectInfo",
     "onView:agentstack-mcp.ecosystemView",
     "onCommand:agentstack-mcp.openDocumentation",
     "onCommand:agentstack-mcp.selectProject",
+    "onCommand:agentstack-mcp.switchProject",
     "onCommand:agentstack-mcp.refreshEcosystem",
     "onCommand:agentstack-mcp.showProjectDataInEditor",
     "onCommand:agentstack-mcp.openProjectSettingsInEditor",
@@ -58,6 +57,10 @@
   ],
   "contributes": {
     "commands": [
+      {
+        "command": "agentstack-mcp.signIn",
+        "title": "AgentStack: Sign in with Device Code"
+      },
       {
         "command": "agentstack-mcp.setApiKey",
         "title": "AgentStack: Set API Key"
@@ -81,6 +84,10 @@
       {
         "command": "agentstack-mcp.selectProject",
         "title": "AgentStack: Select project"
+      },
+      {
+        "command": "agentstack-mcp.switchProject",
+        "title": "AgentStack: Switch project"
       },
       {
         "command": "agentstack-mcp.refreshEcosystem",
@@ -252,12 +259,18 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "agentstack-mcp.ecosystemView",
+        "contents": "Connect AgentStack to use projects, 8DNA data, Rules Engine, Buffs, Payments, Agents, Storage, and Support from VS Code.\n[Sign in with Device Code](command:agentstack-mcp.signIn)\n[Create anonymous project](command:agentstack-mcp.createProjectAndGetKey)\n[Set API key fallback](command:agentstack-mcp.setApiKey)\n[Open docs](command:agentstack-mcp.openDocumentation)"
+      }
+    ],
     "chatParticipants": [
       {
         "id": "agentstack-mcp.agentstack",
         "name": "agentstack",
         "fullName": "AgentStack",
-        "description": "Backend: projects, 8DNA data, Rules Engine, Buffs, Payments, 60+ MCP tools",
+        "description": "Backend: projects, 8DNA data, Rules Engine, Buffs, Payments, and one MCP tool (agentstack.execute) with a live action catalog",
         "isSticky": true,
         "commands": [
           {
@@ -316,7 +329,7 @@
         "agentstack-mcp.enableChatParticipant": {
           "type": "boolean",
           "default": true,
-          "description": "Enable the @agentstack chat participant in Chat (60+ MCP tools).",
+          "description": "Enable the @agentstack chat participant in Chat (agentstack.execute with live action discovery).",
           "order": 3
         },
         "agentstack-mcp.requestTimeoutSeconds": {
@@ -339,13 +352,6 @@
         }
       }
     },
-    "mcpServerDefinitionProviders": [
-      {
-        "id": "agentstack",
-        "label": "AgentStack",
-        "description": "AgentStack backend: projects, 8DNA data store, Rules Engine, Buffs, Payments, Auth, Scheduler, Analytics, Webhooks, Notifications. 60+ MCP tools. Requires API key (command: AgentStack: Create project and get API key)."
-      }
-    ],
     "chatSkills": [
       {
         "path": "./skills/agentstack-projects/SKILL.md",
@@ -396,9 +402,9 @@
     "vsix": "npm run compile && vsce package --no-dependencies"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^22.19.0",
     "@types/vscode": "^1.101.0",
-    "@vscode/vsce": "^2.22.0",
-    "typescript": "^5.9.0"
+    "@vscode/vsce": "^3.6.0",
+    "typescript": "^5.7.3"
   }
 }

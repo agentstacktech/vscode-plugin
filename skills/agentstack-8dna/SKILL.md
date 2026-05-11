@@ -39,4 +39,4 @@ description: Applies AgentStack 8DNA (JSON+): structured JSON data model with bu
 ## References
 
 - **DNA Key-Value API (data store)** — docs/architecture/DNA_KEY_VALUE_API.md in repo: how to read/write project.data and user.data via GET/POST /data or project API.
-- **MCP_SERVER_CAPABILITIES** — repo docs/MCP_SERVER_CAPABILITIES.md.
+- **CAPABILITY_MATRIX** — repo docs/plugins/CAPABILITY_MATRIX.md, generated from `GET /mcp/actions`.

@@ -29,7 +29,7 @@ Enables managing **buffs** (temporary and persistent effects) via MCP tools unde
 | `buffs.apply_temporary_effect` | Apply a temporary effect in one step (create + apply). |
 | `buffs.apply_persistent_effect` | Apply a persistent effect in one step (create + apply). |
 
-For full parameters, see **MCP_SERVER_CAPABILITIES** (repo docs).
+For full parameters, see **CAPABILITY_MATRIX** (`docs/plugins/CAPABILITY_MATRIX.md`) or `GET /mcp/actions`.
 
 ## Instructions
 
@@ -47,5 +47,5 @@ For full parameters, see **MCP_SERVER_CAPABILITIES** (repo docs).
 
 ## References
 
-- **MCP_SERVER_CAPABILITIES** — full list of buffs.* tools and parameters. See repo docs/MCP_SERVER_CAPABILITIES.md.
+- **CAPABILITY_MATRIX** — full list of buffs.* tools and parameters. See repo docs/plugins/CAPABILITY_MATRIX.md.
 - **Rules Engine** — use when/then rules to trigger buffs on events (e.g. signup → apply_temporary_effect).

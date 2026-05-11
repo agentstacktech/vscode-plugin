@@ -18,7 +18,7 @@ import {
 
 const DOCS_BASE = "https://github.com/agentstacktech/AgentStack/blob/master";
 const DOCS_PLUGINS_INDEX = "https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/README.md";
-const DOCS_MCP_CAPABILITIES = `${DOCS_BASE}/docs/MCP_SERVER_CAPABILITIES.md`;
+const DOCS_MCP_CAPABILITIES = `${DOCS_BASE}/docs/plugins/CAPABILITY_MATRIX.md`;
 const DOCS_DNA_KEY_VALUE = `${DOCS_BASE}/docs/architecture/DNA_KEY_VALUE_API.md`;
 
 export const SELECTED_PROJECT_KEY = "agentstack.selectedProjectId";

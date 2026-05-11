@@ -23,7 +23,7 @@ Enables managing **roles and permissions** via MCP: assign roles, list users by 
 | `projects.add_user` | Add user to project. |
 | `projects.remove_user` | Remove user from project. |
 
-Full parameters: **MCP_SERVER_CAPABILITIES** (repo docs).
+Full parameters: **CAPABILITY_MATRIX** (`docs/plugins/CAPABILITY_MATRIX.md`) or `GET /mcp/actions`.
 
 ## Instructions
 
@@ -39,5 +39,5 @@ Full parameters: **MCP_SERVER_CAPABILITIES** (repo docs).
 
 ## References
 
-- **MCP_SERVER_CAPABILITIES** — repo docs/MCP_SERVER_CAPABILITIES.md (auth.*, projects.*).
+- **CAPABILITY_MATRIX** — repo docs/plugins/CAPABILITY_MATRIX.md (auth.*, projects.*, rbac.*).
 - **CONTEXT_FOR_AI** — repo docs/plugins/CONTEXT_FOR_AI.md (RBAC domain).

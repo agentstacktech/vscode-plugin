@@ -12,25 +12,18 @@
 - Run **Run → Start Debugging** (F5) — a new window (Extension Development Host) opens with the extension loaded.  
 - Or build VSIX: `npm run compile` and `npx @vscode/vsce package` (if vsce is installed), then install the .vsix via **Extensions → ... → Install from VSIX**.
 
-### 2. MCP connection (API key)
+### 2. Authentication and MCP connection
 
-The extension **registers** the AgentStack MCP server itself. You only need an API key.
+The Marketplace build avoids proposed MCP APIs. Use the extension UI/chat participant directly, or follow `MCP_QUICKSTART.md` for manual MCP server setup.
 
-1. **Get an API key**  
-   - Via curl (anonymous project):
-     ```bash
-     curl -X POST https://agentstack.tech/mcp/tools/projects.create_project_anonymous \
-       -H "Content-Type: application/json" \
-       -d '{"tool": "projects.create_project_anonymous", "params": {"name": "Test"}}'
-     ```
-   - From the response take `project_api_key` or `user_api_key`.
+1. **Preferred: Device Code sign-in**  
+   Run **AgentStack: Sign in with Device Code**. The Bearer credential is stored in SecretStorage.
 
-2. **Enter the key in VS Code**  
-   - On first MCP use (e.g. opening chat with an agent) VS Code will prompt for the API key — enter it; it is stored in SecretStorage.  
-   - Or run **AgentStack: Set API Key** (Ctrl+Shift+P → "AgentStack: Set API Key").
+2. **Fallback: API key**  
+   Run **AgentStack: Create project and get API key** or **AgentStack: Set API Key**. API keys are also stored in SecretStorage.
 
-3. **Check MCP servers list**  
-   - Command Palette → **MCP: List Servers** (or via Extensions view) — **AgentStack** server should appear.
+3. **Switch project**  
+   Run **AgentStack: Switch project** and choose from the QuickPick.
 
 Details: [MCP_QUICKSTART.md](MCP_QUICKSTART.md).
 
@@ -51,10 +44,10 @@ If the agent calls MCP tools and returns a sensible answer — the extension and
 
 | Symptom | What to check |
 |--------|----------------|
-| MCP server does not appear | Extension is installed and enabled; restart VS Code. |
-| API key prompt does not appear | Run **AgentStack: Set API Key** manually or open chat with an agent that uses tools. |
+| MCP server does not appear | Marketplace build does not use proposed server registration; use @agentstack/sidebar or manual MCP setup from `MCP_QUICKSTART.md`. |
+| API key prompt does not appear | Run **AgentStack: Sign in with Device Code** or **AgentStack: Set API Key** manually. |
 | 401 / 403 on calls | Key is valid; some operations require a subscription. |
-| "Tool not found" | Tool name matches documentation (e.g. `projects.create_project_anonymous`). List: [MCP Server Capabilities](https://github.com/agentstacktech/AgentStack/blob/master/docs/MCP_SERVER_CAPABILITIES.md). |
+| "Tool not found" | Tool name matches the generated capability matrix (e.g. `projects.create_project_anonymous`). List: [Capability Matrix](https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/CAPABILITY_MATRIX.md). |
 
 ---
 
@@ -64,27 +57,34 @@ If the agent calls MCP tools and returns a sensible answer — the extension and
 
 | Component | Purpose |
 |-----------|---------|
-| **Manifest** (`package.json`) | Name, description, MCP Server Definition Provider, commands Set API Key / Create project / Show API key, settings apiKey, enableChatParticipant, requestTimeoutSeconds. |
-| **MCP provider** | Registers the AgentStack HTTP MCP server; on start prompts for API key (if not in SecretStorage) and sends it in `X-API-Key` header. |
-| **Set API Key command** | Update stored API key and refresh MCP servers list. |
+| **Manifest** (`package.json`) | Name, description, commands Sign in / Set API Key / Create project / Switch project / Show credential, settings apiKey, enableChatParticipant, requestTimeoutSeconds. |
+| **Auth module** (`src/auth.ts`, `src/oauthDeviceCode.ts`) | SecretStorage credential resolution, Device Code sign-in, API-key fallback. |
+| **MCP client** (`src/mcpClient.ts`) | Sends Bearer or API-key headers and calls AgentStack actions. |
 | **Documentation** | README, MCP_QUICKSTART, this file. |
 
 ### Capabilities via MCP (after entering API key)
 
-The extension only registers the MCP server; **AgentStack MCP** handles backend requests. After entering the API key the agent gets access to tools such as:
+The extension uses direct API/MCP calls for sidebar and chat helper paths; **AgentStack MCP** handles backend requests. After sign-in/API-key setup the agent gets access to actions such as:
 
 - **Projects:** create (including anonymous), list, details, update, delete, stats, users, settings, activity, API keys.
 - **Logic and rules:** create/update/delete rules, list, execute, processors, commands.
 - **Buffs:** create, apply, extend, rollback, cancel, list active, effective limits.
-- **Payments:** create, status, refund, list transactions, balance.
-- **Auth:** quick sign-in, create user, assign role, profile.
+- **Payments:** create, get, refund, list transactions, balance.
+- **Auth:** login, register, assign role, profile.
 - **Scheduler:** create/cancel/get/list tasks, etc.
 - **Analytics:** usage, metrics.
 - **API keys, Webhooks, notifications, wallets** — as implemented on backend and in MCP.
 
-Full tool list and parameters: [MCP_SERVER_CAPABILITIES](https://github.com/agentstacktech/AgentStack/blob/master/docs/MCP_SERVER_CAPABILITIES.md) in the AgentStack repo.
+Full tool list and parameters: [CAPABILITY_MATRIX](https://github.com/agentstacktech/AgentStack/blob/master/docs/plugins/CAPABILITY_MATRIX.md), generated from `GET /mcp/actions`.
 
 ### Summary
 
-- **Testing:** install extension → on first use enter API key (or **AgentStack: Set API Key**) → in chat ask to create/list projects and verify MCP calls.
-- **Capabilities:** access to 60+ AgentStack MCP tools (projects, logic, buffs, payments, auth, scheduler, analytics, etc.) without manual mcp.json setup.
+- **Testing:** install extension → Device Code sign-in or API-key fallback → switch project → in chat ask to create/list projects and verify MCP calls.
+- **Capabilities:** access to the live AgentStack MCP action catalog (projects, logic, buffs, payments, auth, scheduler, analytics, agents, storage, support, etc.) without manual mcp.json setup.
+
+## Latest Local Smoke Snapshot
+
+2026-05-11:
+
+- `npm run compile` in `provided_plugins/vscode-plugin` — passed.
+- `node provided_plugins/scripts/validate-all-plugins.mjs` — passed with 3 warnings for Cursor placeholder screenshots.
