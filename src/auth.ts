@@ -16,13 +16,47 @@ export function getRequestTimeoutMs(): number {
   return Math.max(1, Math.min(300, sec)) * 1000;
 }
 
-export async function getApiKey(context: vscode.ExtensionContext): Promise<string | undefined> {
+const MIGRATION_FLAG = "agentstack.apiKeyMigratedFromSettings";
+
+async function migratePlainKeyFromSettings(context: vscode.ExtensionContext): Promise<void> {
+  if (context.globalState.get<boolean>(MIGRATION_FLAG)) return;
   const cfg = vscode.workspace.getConfiguration("agentstack-mcp");
-  const fromSettings = cfg.get<string>("apiKey", "");
-  if (fromSettings && fromSettings.trim() !== "") {
-    return fromSettings.trim();
+  const fromSettings = cfg.get<string>("apiKey", "").trim();
+  if (!fromSettings) {
+    await context.globalState.update(MIGRATION_FLAG, true);
+    return;
   }
+  const existing = await context.secrets.get(SECRET_KEY);
+  if (!existing && vscode.workspace.isTrusted) {
+    await context.secrets.store(SECRET_KEY, fromSettings);
+    void vscode.window.showWarningMessage(
+      "AgentStack: API key moved from settings to SecretStorage. Remove any plain key from settings."
+    );
+  } else if (!vscode.workspace.isTrusted) {
+    void vscode.window.showWarningMessage(
+      "AgentStack: API key is in settings (insecure). Trust this workspace to migrate to SecretStorage."
+    );
+    return;
+  }
+  await cfg.update("apiKey", "", vscode.ConfigurationTarget.Global);
+  await context.globalState.update(MIGRATION_FLAG, true);
+}
+
+export async function getApiKey(context: vscode.ExtensionContext): Promise<string | undefined> {
+  await migratePlainKeyFromSettings(context);
   return context.secrets.get(SECRET_KEY);
+}
+
+export async function storeApiKey(context: vscode.ExtensionContext, key: string): Promise<void> {
+  if (!vscode.workspace.isTrusted) {
+    void vscode.window.showWarningMessage("Trust this workspace to store an AgentStack API key.");
+    return;
+  }
+  await context.secrets.store(SECRET_KEY, key.trim());
+  const cfg = vscode.workspace.getConfiguration("agentstack-mcp");
+  if (cfg.get<string>("apiKey", "").trim() !== "") {
+    await cfg.update("apiKey", "", vscode.ConfigurationTarget.Global);
+  }
 }
 
 export async function getMcpOptions(context: vscode.ExtensionContext): Promise<McpClientOptions | null> {

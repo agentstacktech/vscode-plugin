@@ -6,7 +6,7 @@ The VS Code plugin talks to AgentStack backend via MCP (Model Context Protocol):
 
 ## Auth and options
 
-- **API key**: from settings `agentstack-mcp.apiKey` or SecretStorage (`agentstack.apiKey`). Used in header `X-API-Key` for all MCP requests.
+- **Credential**: OAuth Device Code stores Bearer in SecretStorage (`agentstack.apiKey`). Fallback: settings `agentstack-mcp.apiKey` or **Set API Key** → SecretStorage. Sent as `Authorization: Bearer …` or `X-API-Key` depending on token shape.
 - **Base URL**:
   - **baseUrl**: `agentstack-mcp.baseUrl` (default `https://agentstack.tech/mcp`).
 - **getMcpOptions()**: returns `{ baseUrl, apiKey, timeoutMs }` or `null` if no API key. Used by tree, commands, and chat.

@@ -8,7 +8,7 @@ JSON-based data store (8DNA: JSON+ with built-in variants, e.g. A/B tests) and s
 
 1. **Install the extension** from the Marketplace or load the VSIX.
 2. **Sign in** — run **AgentStack: Sign in with Device Code** for OAuth browser login. If OAuth is unavailable, run **AgentStack: Create project and get API key** or **AgentStack: Set API Key** as the fallback.
-3. **Use in chat** — ask the agent to create projects, list projects, get stats, or use any AgentStack action. You’ll see: *AgentStack connected. `agentstack.execute` is available with live action discovery.*
+3. **Use in chat** — select **@agentstack** for read-only fast paths (list projects, stats) and LM tools (`agentstack_execute`, `agentstack_get_projects` when supported). For full catalog coverage use manual MCP setup in [MCP_QUICKSTART.md](MCP_QUICKSTART.md) or Copilot agent mode with MCP configured.
 
 More options (curl, dashboard) in [MCP_QUICKSTART.md](MCP_QUICKSTART.md).
 
@@ -42,7 +42,7 @@ All actions are available in **Chat** when you select the **@agentstack** partic
 | **Create project and get key** | **AgentStack: Create project and get API key** — creates an anonymous project (no account), saves the API key, and connects MCP in one step. |
 | **OAuth / API key** | OAuth Device Code stores a Bearer token in SecretStorage. API keys remain a fallback through **AgentStack: Set API Key**. |
 | **Project switcher** | **AgentStack: Switch project** shows a QuickPick of real projects and stores the selected project for sidebar/chat context. |
-| **Chat skills** | 8 skills for @agentstack: Projects, 8DNA, Buffs, Rules Engine, Assets, RBAC, Payments, Auth — each domain points to the generated capability matrix/live catalog. |
+| **Chat skills** | 22 domain skills for @agentstack (projects, hosting, storage, support, rag, agents, commerce, messenger, …) — decision-first routing; live catalog via `GET /mcp/actions`. |
 
 ## AgentStack vs “just a database”
 

@@ -1,0 +1,6 @@
+{
+  "extension.displayName": "AgentStack MCP",
+  "extension.description": "AgentStack MCP для VS Code: проекты, хостинг, агенты, платежи — живой каталог через agentstack.execute.",
+  "command.signIn.title": "AgentStack: Вход по Device Code",
+  "command.refreshEcosystem.title": "AgentStack: Обновить экосистему"
+}

@@ -29,14 +29,13 @@ Details: [MCP_QUICKSTART.md](MCP_QUICKSTART.md).
 
 ### 3. Testing in chat / agent
 
-In VS Code chat (e.g. with Copilot in agent mode) ask:
+In VS Code chat with **@agentstack**:
 
-- "Create a project in AgentStack named Test Project"  
-  → Expected: call to `projects.create_project_anonymous` (or `projects.create_project` when authenticated).
-- "Show my AgentStack projects"  
-  → Expected: `projects.get_projects`.
-- "Get stats for project &lt;project_id&gt;"  
-  → Expected: `projects.get_stats`.
+- "List my projects" — fast-path via IntentRouter (no LM required).
+- "Get stats" — requires selected project; uses MCP `projects.get_stats`.
+- Other requests — LM fallback with skills context; when the host supports LM tools, `agentstack_execute` / `agentstack_get_projects` are registered.
+
+**CI:** from repo root `node provided_plugins/scripts/audit-vscode-plugin.mjs`; in extension folder `npm test` (vitest), `npm run test:e2e` (smoke).
 
 If the agent calls MCP tools and returns a sensible answer — the extension and MCP are working.
 

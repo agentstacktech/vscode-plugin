@@ -97,6 +97,49 @@ async function pollToken(init: DeviceAuthorizationResponse, traceId: string): Pr
   throw new Error("Device code expired.");
 }
 
+/** Refresh Bearer token when refresh_token is stored (OAuth Device Code). */
+export async function refreshBearerTokenIfStale(
+  context: vscode.ExtensionContext
+): Promise<boolean> {
+  const stored = await context.secrets.get(REFRESH_SECRET_KEY);
+  if (!stored) return false;
+  let payload: { refresh_token?: string; scope?: string };
+  try {
+    payload = JSON.parse(stored) as { refresh_token?: string; scope?: string };
+  } catch {
+    return false;
+  }
+  if (!payload.refresh_token) return false;
+  const traceId = randomUUID();
+  try {
+    const token = await postForm<TokenResponse>(
+      `${platformBaseUrl()}/api/oauth2/token`,
+      {
+        grant_type: "refresh_token",
+        refresh_token: payload.refresh_token,
+        client_id: CLIENT_ID,
+        scope: payload.scope || DEFAULT_SCOPE,
+      },
+      traceId
+    );
+    if (!token.access_token) return false;
+    await context.secrets.store(SECRET_KEY, `Bearer ${token.access_token}`);
+    if (token.refresh_token) {
+      await context.secrets.store(
+        REFRESH_SECRET_KEY,
+        JSON.stringify({
+          refresh_token: token.refresh_token,
+          scope: token.scope || payload.scope,
+          obtained_at: new Date().toISOString(),
+        })
+      );
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function signInWithDeviceCode(context: vscode.ExtensionContext): Promise<string> {
   const traceId = randomUUID();
   const scope = DEFAULT_SCOPE;

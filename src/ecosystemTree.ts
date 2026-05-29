@@ -370,6 +370,9 @@ export class EcosystemTreeDataProvider implements vscode.TreeDataProvider<Ecosys
         { label: "Payments / Wallets", icon: "credit-card", command: "agentstack-mcp.showWalletBalance", commandTitle: "Show ecosystem wallet balance", commandArgs: [element.projectId] },
         { label: "List transactions", icon: "list-unordered", command: "agentstack-mcp.listTransactions", commandTitle: "List payment transactions", commandArgs: [element.projectId] },
         { label: "Rules", icon: "symbol-event", command: "agentstack-mcp.listRules", commandTitle: "List rules", commandArgs: [element.projectId] },
+        { label: "Hosting (/s/)", link: `${DOCS_BASE}/docs/plugins/CONTEXT_FOR_AI.md#hosting-sites`, icon: "globe" },
+        { label: "Agents Fleet", link: `${DOCS_BASE}/docs/adr/AGENTS_FLEET.md`, icon: "robot" },
+        { label: "Support", link: `${DOCS_BASE}/docs/adr/PROJECT_SUPPORT_MESSENGER.md`, icon: "comment-discussion" },
         { label: "8DNA (data)", link: DOCS_DNA_KEY_VALUE, icon: "database" },
       ];
       return items.map((item) => {
@@ -445,6 +448,7 @@ export class EcosystemTreeDataProvider implements vscode.TreeDataProvider<Ecosys
         { label: "MCP Server Capabilities", link: DOCS_MCP_CAPABILITIES, tooltip: "Full tool list: Projects, Auth, Rules, Buffs, Payments, Scheduler, Analytics, Webhooks, Notifications, Wallets, etc." },
         { label: "8DNA & Key-Value API", link: DOCS_DNA_KEY_VALUE, tooltip: "project.data, user.data, key-value store, variants (e.g. A/B tests)." },
         { label: "Plugins index (Cursor, Claude, GPT)", link: DOCS_PLUGINS_INDEX, tooltip: "Same MCP in Cursor, Claude Code, ChatGPT. Links to all plugins." },
+        { label: "MCP Quick start", link: `${DOCS_BASE}/provided_plugins/vscode-plugin/MCP_QUICKSTART.md`, tooltip: "Device Code, API key, manual MCP setup." },
       ];
       return links.map((l) => {
         const node = new EcosystemNode(l.label, "doc", vscode.TreeItemCollapsibleState.None, { link: l.link });

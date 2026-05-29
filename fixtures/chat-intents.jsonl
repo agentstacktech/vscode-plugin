@@ -1,0 +1,2 @@
+{"id":"projects.list.en","prompt":"list my projects","pattern":"list.*projects"}
+{"id":"projects.list.ru","prompt":"список проектов","pattern":"список\\s+проектов"}
