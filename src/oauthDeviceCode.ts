@@ -1,24 +1,8 @@
 import * as vscode from "vscode";
 import { randomUUID } from "crypto";
+import { createRequire } from "module";
+import * as nodePath from "path";
 import { SECRET_KEY, getBaseUrl } from "./auth";
-
-const CLIENT_ID = "vscode-plugin";
-const REFRESH_SECRET_KEY = "agentstack.refreshToken";
-const DEFAULT_SCOPE = [
-  "mcp:execute",
-  "projects:read",
-  "projects:write",
-  "8dna:read",
-  "8dna:write",
-  "logic:write",
-  "logic:dry_run",
-  "rag:read",
-  "rag:write",
-  "storage:read",
-  "storage:write",
-  "buffs:read",
-  "apikeys:write",
-].join(" ");
 
 interface DeviceAuthorizationResponse {
   device_code: string;
@@ -39,24 +23,40 @@ interface TokenResponse {
   error_description?: string;
 }
 
+const nodeRequire = createRequire(__filename);
+// Shared RFC 8628 poll kernel (provided_plugins/shared/plugin-kernel)
+const kernel = nodeRequire(
+  nodePath.join(__dirname, "../../shared/plugin-kernel/deviceCodeClient.mjs")
+) as {
+  pollDeviceToken: (opts: Record<string, unknown>) => Promise<TokenResponse>;
+  postForm: <T>(url: string, params: Record<string, string>, traceId: string) => Promise<T>;
+};
+const { pollDeviceToken, postForm: kernelPostForm } = kernel;
+
+const CLIENT_ID = "vscode-plugin";
+const REFRESH_SECRET_KEY = "agentstack.refreshToken";
+const DEFAULT_SCOPE = [
+  "mcp:execute",
+  "projects:read",
+  "projects:write",
+  "8dna:read",
+  "8dna:write",
+  "logic:write",
+  "logic:dry_run",
+  "rag:read",
+  "rag:write",
+  "storage:read",
+  "storage:write",
+  "buffs:read",
+  "apikeys:write",
+].join(" ");
+
 function platformBaseUrl(): string {
   return getBaseUrl().replace(/\/mcp\/?$/, "").replace(/\/$/, "");
 }
 
 async function postForm<T>(url: string, params: Record<string, string>, traceId: string): Promise<T> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      "X-Trace-Id": traceId,
-    },
-    body: new URLSearchParams(params).toString(),
-  });
-  const json = (await res.json().catch(() => ({}))) as T & { error?: string; error_description?: string };
-  if (!res.ok) {
-    throw new Error(json.error_description || json.error || `HTTP ${res.status}`);
-  }
-  return json;
+  return kernelPostForm(url, params, traceId) as Promise<T>;
 }
 
 async function authorize(scope: string, traceId: string): Promise<DeviceAuthorizationResponse> {
@@ -68,33 +68,14 @@ async function authorize(scope: string, traceId: string): Promise<DeviceAuthoriz
 }
 
 async function pollToken(init: DeviceAuthorizationResponse, traceId: string): Promise<TokenResponse> {
-  const deadline = Date.now() + init.expires_in * 1000;
-  let waitMs = Math.max(1, init.interval || 5) * 1000;
-
-  while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
-    const token = await postForm<TokenResponse>(
-      `${platformBaseUrl()}/api/oauth2/token`,
-      {
-        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-        device_code: init.device_code,
-        client_id: CLIENT_ID,
-      },
-      traceId
-    ).catch((error) => ({ error: error instanceof Error ? error.message : String(error) }));
-
-    if ("access_token" in token && token.access_token) return token;
-    if (token.error === "authorization_pending") continue;
-    if (token.error === "slow_down") {
-      waitMs += 5000;
-      continue;
-    }
-    if (token.error === "access_denied") throw new Error("Authorization was denied.");
-    if (token.error === "expired_token") throw new Error("Device code expired.");
-    const errorDescription = "error_description" in token ? token.error_description : undefined;
-    throw new Error(errorDescription || token.error || "Token exchange failed.");
-  }
-  throw new Error("Device code expired.");
+  return pollDeviceToken({
+    tokenUrl: `${platformBaseUrl()}/api/oauth2/token`,
+    clientId: CLIENT_ID,
+    deviceCode: init.device_code,
+    intervalSec: init.interval ?? 5,
+    expiresInSec: init.expires_in,
+    traceId,
+  }) as Promise<TokenResponse>;
 }
 
 /** Refresh Bearer token when refresh_token is stored (OAuth Device Code). */
