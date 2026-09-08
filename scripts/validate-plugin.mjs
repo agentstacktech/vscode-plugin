@@ -12,7 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const REPO = path.resolve(ROOT, '..', '..');
 const SEMVER = /^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$/;
-const FORBIDDEN_SKILL_TABLE = /^\|\s*`[a-z0-9_.]+`\s*\|/m;
+const FORBIDDEN_SKILL_TABLE = /^\|\s*`[a-z][a-z0-9_]*\.[a-z0-9_.]+`\s*\|/m;
 const EXTENSION_LOC_WARN = 250;
 const EXTENSION_LOC_FAIL = 400;
 

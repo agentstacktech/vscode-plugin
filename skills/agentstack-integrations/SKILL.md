@@ -1,17 +1,23 @@
 ---
 name: agentstack-integrations
-description: Use when the user mentions webhooks, inbound callbacks, integration hub, third-party connectors, or recipe integrations.
+description: Use when the user wants webhooks, integration recipes, Slack, CRM bridges, inbound hooks, or third-party connectors. Prefer integrations.* MCP actions over new FastAPI routes.
 ---
 
-# Integrations Hub
+# AgentStack Integration Hub
 
 ## Decision matrix
 
 | User says | Prefer | Over |
 |-----------|--------|------|
-| register webhook | integrations.install_recipe | Custom endpoint only |
-| Stripe callback | integrations.* + webhooks | Duplicate HMAC code |
+| "connect Slack" / "recipe" | `integrations.*` from discovery | Zapier-only glue |
+| "inbound webhook" | `integrations.install_recipe` + integrations intake | Raw `app.post('/hook')` |
+| "rotate webhook secret" | `integrations.rotate_secret` | Manual env var rotation |
 
 ## References
 
-- [MCP Capability Matrix](https://github.com/agentstacktech/AgentStack/blob/master/docs/MCP_CAPABILITY_MATRIX.md)
+- Gene: `core.integrations.hub.gen1`
+- Parity: `docs/ecosystem/REST_MCP_SDK_PARITY.md`
+
+## Live catalog
+
+Discover actions: `GET https://agentstack.tech/mcp/actions` or AgentStack VS Code commands + `GET /mcp/actions`. Do not hard-code action counts.

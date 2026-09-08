@@ -1,6 +1,6 @@
 ---
 name: agentstack-commerce-assets
-description: Digital goods, asset presets, inventory wizard, marketplace items. Prefer assets.* and sdk.commerce.assets over custom product tables.
+description: Use when the user wants digital goods, asset presets, inventory wizard, marketplace items, or commerce asset catalog. Prefer assets.* and sdk.commerce.assets over custom product tables.
 ---
 
 # AgentStack Commerce Assets
@@ -9,11 +9,14 @@ description: Digital goods, asset presets, inventory wizard, marketplace items. 
 
 | User says | Prefer | Over |
 |-----------|--------|------|
-| Digital item / preset | assets.*, asset_presets_v1 | Custom SKU tables |
-| Compose / wizard | @agentstack/sdk/commerce/assets | Hand-built forms |
-| Payments / wallet | agentstack-commerce skill | assets.* for money |
+| "digital item" / "preset" | `assets.*`, fixtures `asset_presets_v1.json` | Custom SKUs table |
+| "wizard" / "compose asset" | `@agentstack/sdk/commerce/assets` | Hand-built forms |
 
 ## References
 
-- Genes: sdk.commerce.assets.gen1, frontend.commerce.assets.wizard.gen1
-- [MCP Capability Matrix](https://github.com/agentstacktech/AgentStack/blob/master/docs/MCP_CAPABILITY_MATRIX.md)
+- Genes: `sdk.commerce.assets.gen1`, `frontend.commerce.assets.wizard.gen1`
+- For payments/wallets see `agentstack-commerce` skill.
+
+## Live catalog
+
+Discover actions: `GET https://agentstack.tech/mcp/actions` or AgentStack VS Code commands + `GET /mcp/actions`. Do not hard-code action counts.

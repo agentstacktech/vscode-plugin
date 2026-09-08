@@ -1,17 +1,28 @@
 ---
 name: agentstack-sdk
-description: Use when the user builds a client app with sdk.protocol, TanStack Query, REST+MCP parity, or capability task atoms.
+description: Use when the user wants TypeScript SDK setup, sdk.protocol, getCapabilityMatrix, React Query cache invalidation, or client-side AgentStack integration. Prefer @agentstack/sdk over raw fetch to scattered REST endpoints.
 ---
 
-# AgentStack SDK
+# AgentStack SDK (TypeScript)
 
 ## Decision matrix
 
 | User says | Prefer | Over |
 |-----------|--------|------|
-| TypeScript client | sdk.protocol + @agentstack/sdk | Raw fetch only |
-| cache invalidation | sdk + shared cache keys | Ad-hoc reload |
+| "typed client" / "SDK" | `@agentstack/sdk`, `sdk.protocol` | Ad-hoc fetch |
+| "capability matrix in app" | `getCapabilityMatrix()` | Hard-coded action list |
+| "invalidate after mutation" | `cacheInvalidation.ts` patterns | Manual refetch everywhere |
+
+## Rules
+
+- MCP actions with dots may expose `safe_action` alias when a client forbids dots — check discovery.
+- Never mix Bearer and `X-API-Key` on one request.
 
 ## References
 
-- [AGENT_PROTOCOL.md](https://github.com/agentstacktech/AgentStack/blob/master/docs/AGENT_PROTOCOL.md)
+- Gene: `repo.platform.sdk.ai_surface.gen1`, `sdk.protocol`
+- Docs: `docs/AGENT_PROTOCOL_QUICKSTART.md`
+
+## Live catalog
+
+Discover actions: `GET https://agentstack.tech/mcp/actions` or AgentStack VS Code commands + `GET /mcp/actions`. Do not hard-code action counts.
