@@ -10,13 +10,13 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { agentstackAuthHeaders } from '../../scripts/lib/agentstackAuthHeaders.mjs';
+import { agentstackAuthHeaders } from './lib/agentstackAuthHeaders.mjs';
 import {
   evaluateSingleToolSurface,
   fetchMcpHealth,
   postToolsCallExecuteAlias,
   postToolsList,
-} from '../../scripts/lib/mcpSurfaceProbe.mjs';
+} from './lib/mcpSurfaceProbe.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MCP = path.join(os.homedir(), '.cursor', 'mcp.json');

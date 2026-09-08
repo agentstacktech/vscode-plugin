@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { HARD_CODED_ACTION_COUNT, ACTION_COUNT_ALLOWLIST } from '../../scripts/lib/stale-actions.mjs';
+import { HARD_CODED_ACTION_COUNT, ACTION_COUNT_ALLOWLIST } from './lib/stale-actions.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
