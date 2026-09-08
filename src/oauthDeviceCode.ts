@@ -37,8 +37,10 @@ const CLIENT_ID = "vscode-plugin";
 const REFRESH_SECRET_KEY = "agentstack.refreshToken";
 const DEFAULT_SCOPE = [
   "mcp:execute",
+  "mcp:read",
   "projects:read",
   "projects:write",
+  "projects:admin",
   "8dna:read",
   "8dna:write",
   "logic:write",
@@ -47,7 +49,11 @@ const DEFAULT_SCOPE = [
   "rag:write",
   "storage:read",
   "storage:write",
+  "agents:run",
+  "bots:run",
+  "bots:admin",
   "buffs:read",
+  "buffs:write",
   "apikeys:write",
 ].join(" ");
 

@@ -1,0 +1,111 @@
+## Staging operator log (G1)
+
+| Date | Operator | Environment | Result |
+|------|----------|-------------|--------|
+| 2026-07-17 | automated | local validate + smoke-local L1–L2 | PASS |
+| 2026-08-07 | automated | validate + smoke + audit-cursor-plugin + MCP contract tests (40) | PASS |
+| 2026-08-07 | automated | `verify-mcp-surface-e2e.mjs` — prod tools/list=1, tools/call alias OK | PASS |
+| _pending_ | human | Cursor UI §3 — Reload Window, confirm 1 server + 1 tool in MCP panel | _after refresh-cursor-runtime --fix_ |
+
+## 0. Prerequisites
+
+- [ ] Recent Cursor build with plugin + hooks support installed.
+- [ ] Node 18+ on PATH (`node --version`).
+- [ ] Network access to the AgentStack cloud API (production `https://agentstack.tech` or a staging URL; override via `$env:AGENTSTACK_BASE_URL`). AgentStack is cloud-only — there is nothing to run locally.
+- [ ] Test user with a verified email on that environment.
+
+## 1. Structural validation
+
+- [ ] `node scripts/install-local.mjs` then Reload Window (see [LOCAL_INSTALL.md](LOCAL_INSTALL.md)).
+- [ ] `node scripts/validate-plugin.mjs` exits 0 with no FAIL lines.
+- [ ] `pwsh scripts/smoke-local.ps1 -Install` (or `node scripts/smoke-local.mjs --install`) exits 0.
+
+## 2. Install (OAuth Device Code)
+
+- [ ] Run `/agentstack-init` — plugin prints `user_code` and `verification_uri_complete`.
+- [ ] Browser auto-opens `/activate?user_code=...`.
+- [ ] `/activate` lists requested scopes and a human-readable client label ("Cursor (cursor-plugin)").
+- [ ] After approve, the plugin prints `AgentStack MCP connected.` with scope and expiry.
+- [ ] `~/.cursor/mcp.json` now has `Authorization: Bearer ...` under `mcpServers.agentstack.headers`.
+- [ ] `~/.cursor/agentstack-refresh` exists with `0600` perms (on Unix).
+
+## 3. MCP connectivity
+
+Run `node scripts/verify-mcp-surface-e2e.mjs` for automated API checks (tools/list, alias `tools/call`, plugin plane).
+
+- [ ] Cursor shows AgentStack MCP **in the plugin panel** (0.4.18 URL-only `mcp.json`). Click **Connect** if needed. Device Code `user-agentstack` may also be present. Empty Bearer on `plugin-agentstack-*` is still G-A162. *Human: Reload Window after `refresh-cursor-runtime.mjs --fix`.*
+- [ ] Tools panel shows **one** `agentstack_execute` tool. *Human: confirm in Cursor UI.*
+- [x] `POST /mcp` `tools/list` returns exactly 1 tool named `agentstack.execute` — **verified prod 2026-08-07**.
+- [x] `tools/call` with `agentstack_execute` succeeds (Postel backward compat) — **verified prod 2026-08-07**.
+- [ ] `/agentstack-capability-matrix` prints actions grouped by domain (live `GET /mcp/actions`).
+
+## 4. Scaffolding
+
+- [ ] `/agentstack-scaffold-auth` generates login + register + session gating that calls `auth.*` via `@agentstack/sdk`.
+- [ ] `/agentstack-scaffold-backend` adds RBAC middleware + buffs tier gates + AgentPay widget + admin panel.
+- [ ] `/agentstack-sync-schema` on a Prisma schema emits (a) 8DNA key plan, (b) FAP policy stubs, (c) migration script.
+- [ ] `/agentstack-index-docs` creates a `my-project-docs` RAG collection and ingests the project's markdown/text docs (refusing source code and secret-looking files).
+
+## 5. Hooks
+
+- [ ] `sessionStart`: with a Bearer < 2 min from expiry, restarting Cursor rotates it. `~/.cursor/mcp.json` gets a fresh token.
+- [ ] `beforeShellExecution`: `curl -H "X-API-Key: ask_realprefix..."` is blocked with a clear error.
+- [ ] `postToolUse`: with `agentstack.sendTelemetry: true` in `~/.cursor/settings.json`, MCP calls accumulate in `~/.cursor/agentstack-telemetry.jsonl` and flush hourly to `/api/telemetry/plugin`.
+- [ ] `afterFileEdit`: editing `mcp.json` triggers `capability-refresh.mjs`, which snapshots actions to `~/.cursor/agentstack-capabilities.json`.
+
+## 6. Agents
+
+- [ ] `@agentstack-architect` takes a product spec and produces a multi-domain plan (auth + RBAC + buffs + rules + RAG).
+- [ ] `@agentstack-migrator` on a Supabase project emits a cutover plan with zero-downtime step order.
+
+## 7. Decision-first behaviour
+
+- [ ] Ask Cursor "add user login with password" — it calls `auth.register` / `auth.login` instead of installing NextAuth.
+- [ ] Ask "store theme preference" — it writes `user.data.prefs.theme` via 8DNA, not Prisma.
+- [ ] Ask "email users every Friday" — it creates a `scheduler.create_task` + `notifications.send`, not a custom cron.
+
+## 8. Diagnostics
+
+- [ ] `/agentstack-diagnose` prints a single status table showing: MCP reachable, Bearer expiry, active project, scope list, recent errors (empty), hooks wired.
+
+## 9. Re-auth and logout
+
+- [ ] `/agentstack-login --switch-project` starts a fresh Device Code flow and replaces the Bearer.
+- [ ] Deleting `~/.cursor/agentstack-refresh` + restarting Cursor prints a warning and suggests `/agentstack-login`.
+
+## 10. E2E automation
+
+- [ ] `./scripts/test-device-code.ps1` completes successfully against a staging instance.
+
+## 11. Marketplace assets
+
+- [ ] `plugins/agentstack/assets/logo.svg` and `logo-dark.svg` render correctly light/dark.
+- [ ] `plugins/agentstack/assets/screenshots/*.png` are populated at 1920x1200.
+- [ ] `.cursor-plugin/listing.json` links to [pricing](https://agentstack.tech/pricing) and [support](https://agentstack.tech/support).
+
+## 12. Docs sync
+
+- [ ] `README.md`, `MCP_QUICKSTART.md`, and this checklist mention version `0.4.16`.
+- [ ] `CHANGELOG.md` has a `[0.4.16]` entry.
+- [ ] `lib/plugin-kernel/` is present (self-contained Device Code).
+
+## 13. Design alignment
+
+- [ ] The `agentstack-prefer.mdc` rule is `alwaysApply: true` and lists at least 10 decision rules.
+- [ ] Every skill has a "live catalog" reference to `GET /mcp/actions` rather than a hard-coded action list.
+
+## 14. Security
+
+- [ ] No real API keys or Bearers committed (validator enforces placeholders).
+- [ ] `pre-shell-scan.mjs` blocks `ask_*` and JWT Bearers in shell commands.
+- [ ] Device Code session TTL ≤ 10 min on the backend.
+
+## 15. Performance
+
+- [ ] `/agentstack-init` reaches "MCP connected" in < 30 s on a warm connection.
+- [ ] `GET /mcp/actions` responds in < 500 ms warm / < 2 s cold.
+
+## 16. Uninstall
+
+- [ ] Removing the plugin from Cursor does not delete `~/.cursor/mcp.json` but does disable the `agentstack` entry safely (manual clean-up documented).
+- [ ] `/agentstack-login --revoke` deletes the refresh token and removes the Bearer from `~/.cursor/mcp.json`.

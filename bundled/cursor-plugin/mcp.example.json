@@ -1,0 +1,13 @@
+{
+  "_comment": "Example only — copy into ~/.cursor/mcp.json via /agentstack-init. Do NOT ship this as plugins/agentstack/mcp.json: Cursor auto-registers it as plugin-agentstack-* with an empty ${AGENTSTACK_ACCESS_TOKEN} and shadows the user MCP server.",
+  "mcpServers": {
+    "agentstack": {
+      "type": "streamable-http",
+      "url": "https://agentstack.tech/mcp",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer ${AGENTSTACK_ACCESS_TOKEN}"
+      }
+    }
+  }
+}

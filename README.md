@@ -1,5 +1,7 @@
 # AgentStack MCP — VS Code Extension
 
+**Platform line:** AgentStack **0.4.18** (extension package version is independent — see [CHANGELOG.md](CHANGELOG.md)).
+
 VS Code extension that connects **AgentStack MCP** so you can use the live AgentStack action catalog (Projects, Auth, Scheduler, Analytics, Rules Engine, Webhooks, Notifications, Wallets, Payments, Buffs, Agents, Storage, Support, and more) via one tool (`agentstack.execute`) from chat and agent mode.
 
 JSON-based data store (8DNA: JSON+ with built-in variants, e.g. A/B tests) and server-side logic without boilerplate.

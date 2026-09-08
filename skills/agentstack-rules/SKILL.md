@@ -9,7 +9,7 @@ description: Rules Engine when/then automation via MCP (logic.*, rules.*). Use w
 
 | Intent signal | Prefer | Over |
 |---------------|--------|------|
-| When/then automation | logic.create / rules.create_rules | Custom cron scripts |
+| When/then automation | logic.create | Custom cron scripts |
 | List or edit rules | logic.list, logic.update, logic.delete | Hard-coded handlers |
 | Trigger buff on event | logic.* action → buffs.* | Inline trial code |
 | Payment side effects | logic.* → payments.* / wallets.* | Duplicate webhooks |

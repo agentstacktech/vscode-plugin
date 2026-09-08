@@ -1,0 +1,16 @@
+---
+description: Tenant apps on AgentStack may use messenger ordering and 8DNA sandbox for experiments; platform monorepo edits do not default to rollout machinery.
+globs: ["**/*"]
+alwaysApply: false
+---
+
+# Messenger & experiments (tenant apps)
+
+For **applications built on AgentStack** (not this monorepo):
+
+- DM ordering: unified `(hlc, author_user_id, id)` — see `agentstack-messenger` skill.
+- A/B / canary data: 8DNA sandbox (`parent_uuid`, `generation`, `rollout_steps`) when the user asks for experiments.
+
+For **platform maintenance** in a monorepo checkout, skip unsolicited canary design unless explicitly requested.
+
+Messenger ordering is handled by the platform — use `social.*` MCP actions; see `agentstack-messenger` skill.

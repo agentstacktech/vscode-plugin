@@ -1,0 +1,652 @@
+#!/usr/bin/env node
+/**
+ * Cursor Plugin AgentStack — structure validation (v0.4.9)
+ *
+ * Covers the 5-layer plugin architecture (rules, skills, commands, agents, hooks)
+ * plus the OAuth Device Code flow shipped in 0.4.9.
+ *
+ * Run from plugin root: node scripts/validate-plugin.mjs
+ * Exit 0 = success, 1 = validation failed.
+ */
+
+import fs from 'fs';
+import path from 'path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'url';
+import {
+  STALE_ACTIONS,
+  textHasStaleAction,
+  SECRET_PATTERNS,
+  SAFE_PLACEHOLDER,
+  HARD_CODED_ACTION_COUNT,
+  ACTION_COUNT_ALLOWLIST,
+  ROUTER_SKILLS_REQUIRED,
+  ROUTER_SKILLS_OPTIONAL,
+} from './lib/stale-actions.mjs';
+import {
+  pluginMcpOAuthError,
+  pluginMcpPointerError,
+} from '../plugins/agentstack/lib/plugin-kernel/mcpConfig.mjs';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+/** Publish / monorepo package root (has marketplace.json + scripts/). */
+const ROOT = path.resolve(__dirname, '..');
+/** Cursor plugin package (rules/skills/hooks/mcp) — under plugins/agentstack. */
+const PLUGIN = path.join(ROOT, 'plugins', 'agentstack');
+
+/** AgentStack monorepo root when nested under provided_plugins/; else publish root. */
+function resolveRepoRoot() {
+  const nested = path.resolve(ROOT, '..', '..');
+  if (
+    fs.existsSync(path.join(nested, 'docs/plugins/CAPABILITY_MATRIX.md')) ||
+    fs.existsSync(path.join(nested, 'provided_plugins/scripts/lib/stale-actions.mjs'))
+  ) {
+    return nested;
+  }
+  return ROOT;
+}
+
+const REPO_ROOT = resolveRepoRoot();
+const STRICT_SCREENSHOTS =
+  process.argv.includes('--strict-screenshots') ||
+  process.env.AGENTSTACK_STRICT_SCREENSHOTS === '1';
+const CAPABILITY_MATRIX_CANDIDATES = [
+  path.join(ROOT, 'docs/CAPABILITY_MATRIX.md'),
+  path.join(REPO_ROOT, 'docs/plugins/CAPABILITY_MATRIX.public.md'),
+  path.join(REPO_ROOT, 'docs/plugins/CAPABILITY_MATRIX.md'),
+  path.join(REPO_ROOT, 'agentstack_repo/docs/MCP_CAPABILITY_MATRIX.md'),
+  path.join(REPO_ROOT, 'docs/MCP_CAPABILITY_MATRIX.md'),
+];
+
+const REQUIRED_REPO_FILES = [
+  '.cursor-plugin/marketplace.json',
+  '.cursor-plugin/listing.json',
+  'README.md',
+  'CHANGELOG.md',
+  'LICENSE',
+  'scripts/lib/stale-actions.mjs',
+  'docs/CAPABILITY_MATRIX.md',
+];
+
+const REQUIRED_PLUGIN_FILES = [
+  '.cursor-plugin/plugin.json',
+  'mcp.json',
+  'hooks/hooks.json',
+  'hooks/scripts/device-code.mjs',
+  'hooks/scripts/session-start.mjs',
+  'hooks/scripts/pre-shell-scan.mjs',
+  'hooks/scripts/post-tool-telemetry.mjs',
+  'hooks/scripts/capability-refresh.mjs',
+  'hooks/scripts/pre-mcp-cap-check.mjs',
+  'hooks/scripts/session-end.mjs',
+  'hooks/scripts/post-tool-failure.mjs',
+  'hooks/scripts/pre-nav-index-edit.mjs',
+  'lib/plugin-kernel/deviceCodeClient.mjs',
+  'assets/logo.svg',
+  'assets/logo-dark.svg',
+  'assets/logo.png',
+  'assets/brand-mark.svg',
+];
+
+const REQUIRED_PLUGIN_DIRS = [
+  'rules',
+  'skills',
+  'commands',
+  'agents',
+  'hooks',
+  'hooks/scripts',
+  'lib',
+  'lib/plugin-kernel',
+  'assets',
+];
+
+const KEBAB_REGEX = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
+const SEMVER_REGEX = /^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$/;
+const TARGET_VERSION = '0.4.18';
+const PNG_MIN_BYTES = 200; // 1×1 placeholders are ~70 B; real/mock 1920×1200 are larger
+const MIN_TRIGGER_KEYWORDS = 3;
+
+let hasErrors = false;
+
+function fail(msg) {
+  console.error('FAIL ' + msg);
+  hasErrors = true;
+}
+function ok(msg) {
+  console.log('OK   ' + msg);
+}
+function warn(msg) {
+  console.warn('WARN ' + msg);
+}
+
+/** Read PNG IHDR width/height (no deps). */
+function readPngSize(filePath) {
+  try {
+    const buf = fs.readFileSync(filePath);
+    if (buf.length < 24) return null;
+    if (buf.toString('ascii', 1, 4) !== 'PNG') return null;
+    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  } catch {
+    return null;
+  }
+}
+
+function checkFile(base, filePath, label = filePath) {
+  const full = path.join(base, filePath);
+  if (!fs.existsSync(full)) {
+    fail(`Missing: ${label}`);
+    return null;
+  }
+  ok(`${label} exists`);
+  return full;
+}
+
+function checkDir(base, dirPath, label = dirPath) {
+  const full = path.join(base, dirPath);
+  if (!fs.existsSync(full) || !fs.statSync(full).isDirectory()) {
+    fail(`Missing directory: ${label}`);
+    return false;
+  }
+  ok(`${label}/ exists`);
+  return true;
+}
+
+function loadJson(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (e) {
+    fail(`Invalid JSON: ${path.relative(ROOT, filePath)} — ${e.message}`);
+    return null;
+  }
+}
+
+function parseFrontmatter(content) {
+  const m = content.match(/^---\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)/);
+  if (!m) return null;
+  const body = m[1];
+  const fields = {};
+  for (const line of body.split(/\r?\n/)) {
+    const kv = line.match(/^([a-zA-Z_][\w-]*):\s*(.*)$/);
+    if (kv) fields[kv[1]] = kv[2].trim();
+  }
+  return fields;
+}
+
+function countWords(str) {
+  if (!str) return 0;
+  return str.split(/[\s,./|]+/).filter(Boolean).length;
+}
+
+function walkTextFiles(dir, out = []) {
+  const skip = new Set(['.git', 'node_modules', 'out', 'dist', 'hooks/fixtures']);
+  const textExt = new Set(['.json', '.js', '.mjs', '.ts', '.md', '.mdc', '.yaml', '.yml', '.ps1', '.svg']);
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (skip.has(entry.name)) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) walkTextFiles(full, out);
+    else if (/^validate.*\.mjs$/.test(entry.name)) continue;
+    else if (textExt.has(path.extname(entry.name).toLowerCase())) out.push(full);
+  }
+  return out;
+}
+
+function parseCapabilityActions() {
+  for (const matrixPath of CAPABILITY_MATRIX_CANDIDATES) {
+    if (!fs.existsSync(matrixPath)) continue;
+    const content = fs.readFileSync(matrixPath, 'utf8');
+    const actions = new Set();
+    for (const match of content.matchAll(/\|\s+`([a-z0-9_.]+)`\s+\|/g)) {
+      actions.add(match[1]);
+    }
+    if (actions.size === 0) {
+      continue;
+    }
+    const total = content.match(/Total actions:\s+\*\*(\d+)\*\*/);
+    if (!total) fail(`${path.relative(REPO_ROOT, matrixPath)}: missing total action count`);
+    else ok(`${path.relative(REPO_ROOT, matrixPath)}: total actions = ${total[1]}`);
+    return actions;
+  }
+  fail('CAPABILITY_MATRIX.md: no action rows parsed in canonical or fallback matrix');
+  return new Set();
+}
+
+function checkTextSecurityAndDrift(liveActions) {
+  for (const filePath of walkTextFiles(ROOT)) {
+    const relative = path.relative(ROOT, filePath).replace(/\\/g, '/');
+    if (relative.startsWith('hooks/fixtures/') || relative.includes('/hooks/fixtures/')) continue;
+    // Drift map SoT — contains legacy action names by design
+    if (relative === 'scripts/lib/stale-actions.mjs' || relative.endsWith('/scripts/lib/stale-actions.mjs')) continue;
+    const content = fs.readFileSync(filePath, 'utf8');
+    for (const [oldAction, newAction] of STALE_ACTIONS) {
+      if (textHasStaleAction(content, oldAction)) {
+        const severity = liveActions.has(newAction) ? fail : warn;
+        severity(`${relative}: stale action "${oldAction}" found; use "${newAction}" or runtime discovery`);
+      }
+    }
+    const repoRelative = path.relative(REPO_ROOT, filePath).replace(/\\/g, '/');
+    if (
+      HARD_CODED_ACTION_COUNT.test(content) &&
+      !ACTION_COUNT_ALLOWLIST.has(repoRelative) &&
+      !ACTION_COUNT_ALLOWLIST.has(relative)
+    ) {
+      fail(`${relative}: hard-coded action count; use GET /mcp/actions (see docs/plugins/CANONICAL_COPY.md)`);
+    }
+    for (const { name, regex } of SECRET_PATTERNS) {
+      for (const match of content.matchAll(regex)) {
+        const start = Math.max(0, match.index - 40);
+        const end = Math.min(content.length, match.index + match[0].length + 40);
+        if (!SAFE_PLACEHOLDER.test(content.slice(start, end))) {
+          fail(`${relative}: possible committed secret (${name})`);
+        }
+      }
+    }
+  }
+}
+
+console.log(`Validating Cursor plugin structure`);
+console.log(`  repo:   ${ROOT}`);
+console.log(`  plugin: ${PLUGIN}\n`);
+
+if (!fs.existsSync(PLUGIN)) {
+  fail('plugins/agentstack/ missing — Cursor requires marketplace.json + nested plugin package');
+}
+
+const LIVE_ACTIONS = parseCapabilityActions();
+
+// 1. Required files / dirs
+for (const f of REQUIRED_REPO_FILES) checkFile(ROOT, f);
+for (const f of REQUIRED_PLUGIN_FILES) checkFile(PLUGIN, f, `plugins/agentstack/${f}`);
+for (const d of REQUIRED_PLUGIN_DIRS) checkDir(PLUGIN, d, `plugins/agentstack/${d}`);
+
+// 3. plugin.json (inside plugin package)
+const pluginPath = path.join(PLUGIN, '.cursor-plugin/plugin.json');
+let plugin = null;
+if (fs.existsSync(pluginPath)) {
+  plugin = loadJson(pluginPath);
+  if (plugin) {
+    if (plugin.$schema !== undefined) {
+      fail('plugin.json: remove "$schema" — Cursor rejects external schema URLs and fails plugin load');
+    }
+    const required = ['name', 'displayName', 'version', 'description', 'author', 'license', 'keywords', 'logo'];
+    for (const key of required) {
+      if (plugin[key] === undefined || plugin[key] === '') fail(`plugin.json: missing or empty "${key}"`);
+    }
+    if (plugin.name && !KEBAB_REGEX.test(plugin.name)) fail(`plugin.json: "name" must be lowercase alphanumeric/kebab/dotted, got: ${plugin.name}`);
+    else if (plugin.name) ok('plugin.json: name format is Cursor-compatible');
+    if (plugin.version && !SEMVER_REGEX.test(plugin.version)) fail(`plugin.json: version is not semver: ${plugin.version}`);
+    else if (plugin.version === TARGET_VERSION) ok(`plugin.json: version ${plugin.version}`);
+    else if (plugin.version) warn(`plugin.json: version ${plugin.version} (expected ${TARGET_VERSION})`);
+    // Schema-invalid keys (Cursor additionalProperties: false) — must not ship
+    for (const bad of ['logoDark', 'icon', 'iconDark', 'categories', 'engines']) {
+      if (plugin[bad] !== undefined) fail(`plugin.json: "${bad}" is not in Cursor plugin schema — move to README/listing.json`);
+    }
+    if (plugin.author && typeof plugin.author === 'object' && plugin.author.url) {
+      fail('plugin.json: author.url is not in Cursor schema — use homepage');
+    }
+    const logoPath = plugin.logo;
+    if (!logoPath) fail('plugin.json: logo is required by current Cursor plugin docs');
+    else if (!fs.existsSync(path.join(PLUGIN, logoPath))) fail(`plugin.json: logo path does not exist: ${logoPath}`);
+    else ok(`plugin.json: logo path exists (${logoPath})`);
+    if (logoPath && logoPath.endsWith('.png')) {
+      ok('plugin.json: logo is PNG (Cursor chip raster; SVG gradients often flatten to empty)');
+    } else if (logoPath && !logoPath.endsWith('.svg')) {
+      warn('plugin.json: logo should be PNG (chip) or SVG (marketplace)');
+    }
+    if (Array.isArray(plugin.keywords) && plugin.keywords.length >= 5) ok(`plugin.json: ${plugin.keywords.length} keywords`);
+    else fail('plugin.json: at least 5 keywords recommended');
+    if (plugin.hooks && plugin.hooks !== 'hooks/hooks.json') warn(`plugin.json: hooks points to ${plugin.hooks}, expected hooks/hooks.json`);
+    const ptrErr = pluginMcpPointerError(plugin);
+    if (ptrErr) fail(`plugin.json: ${ptrErr}`);
+    else ok(`plugin.json: mcpServers=${plugin.mcpServers}`);
+    if (plugin.variables?.properties?.AGENTSTACK_ACCESS_TOKEN) {
+      fail('plugin.json: variables.AGENTSTACK_ACCESS_TOKEN is the old Configure API-key form — omit variables');
+    } else {
+      ok('plugin.json: no Configure API-key variables (Connect + Device Code)');
+    }
+  }
+}
+
+// 3a. Cursor marketplace.json (required for Add marketplace / GitHub install)
+const marketplacePath = path.join(ROOT, '.cursor-plugin/marketplace.json');
+if (fs.existsSync(marketplacePath)) {
+  const mp = loadJson(marketplacePath);
+  if (mp) {
+    if (mp.$schema !== undefined) {
+      fail('marketplace.json: remove "$schema" — Cursor rejects external schema URLs on marketplace manifests');
+    }
+    if (!mp.name || !KEBAB_REGEX.test(mp.name)) fail('marketplace.json: name required (kebab-case)');
+    else ok(`marketplace.json: name=${mp.name}`);
+    if (!mp.owner?.name) fail('marketplace.json: owner.name required');
+    if (!Array.isArray(mp.plugins) || mp.plugins.length === 0) fail('marketplace.json: plugins[] required');
+    else {
+      const entry = mp.plugins.find((p) => p.name === 'agentstack') || mp.plugins[0];
+      if (!entry?.name || !entry?.source) fail('marketplace.json: each plugin needs name + source');
+      const pluginRoot = mp.metadata?.pluginRoot || '';
+      const sourceDir = path.join(ROOT, pluginRoot, entry.source);
+      if (!fs.existsSync(path.join(sourceDir, '.cursor-plugin/plugin.json'))) {
+        fail(`marketplace.json: source "${entry.source}" has no .cursor-plugin/plugin.json under ${pluginRoot || '.'}`);
+      } else {
+        ok(`marketplace.json: source resolves → ${path.relative(ROOT, sourceDir)}`);
+      }
+      if (entry.name !== 'agentstack') warn(`marketplace.json: expected plugin name agentstack, got ${entry.name}`);
+      if (String(entry.source).includes('./') || entry.source === '.') {
+        fail('marketplace.json: use bare source dir name (e.g. "agentstack"), not "." or "./…"');
+      }
+    }
+    if (mp.metadata?.pluginRoot !== 'plugins') {
+      warn('marketplace.json: metadata.pluginRoot should be "plugins" (Cursor 2.6+ multi-plugin layout)');
+    }
+  }
+} else {
+  fail('.cursor-plugin/marketplace.json missing — Cursor Add marketplace requires it');
+}
+
+// 3b. listing.json (AgentStack publisher SoT — screenshots/support; not Cursor marketplace schema)
+const listingPath = path.join(ROOT, '.cursor-plugin/listing.json');
+if (fs.existsSync(listingPath)) {
+  const marketplace = loadJson(listingPath);
+  if (marketplace) {
+    if (marketplace.$schema && String(marketplace.$schema).includes('cursor.com/schemas/marketplace')) {
+      fail('listing.json: must not claim Cursor marketplace.json $schema (use marketplace.json for that)');
+    }
+    if (!marketplace.publisher) fail('listing.json: publisher is required');
+    const listing = marketplace.listing || {};
+    if (!listing.name) fail('listing.json: listing.name is required');
+    if (!listing.tagline || listing.tagline.length > 80) fail('listing.json: listing.tagline missing or longer than 80 chars');
+    if (!listing.description || listing.description.length < 80) fail('listing.json: listing.description too short for marketplace review');
+    if (!Array.isArray(listing.categories) || listing.categories.length === 0) fail('listing.json: listing.categories required');
+    if (!listing.privacy || !/^https:\/\//.test(listing.privacy)) fail('listing.json: listing.privacy must be an https URL');
+    if (!listing.terms || !/^https:\/\//.test(listing.terms)) fail('listing.json: listing.terms must be an https URL');
+    for (const screenshot of listing.screenshots || []) {
+      const full = path.join(ROOT, screenshot);
+      if (!fs.existsSync(full)) {
+        const msg = `listing.json: screenshot missing: ${screenshot}`;
+        if (STRICT_SCREENSHOTS) fail(msg);
+        else warn(msg);
+      } else {
+        const size = fs.statSync(full).size;
+        if (STRICT_SCREENSHOTS) {
+          const dims = readPngSize(full);
+          if (!dims || dims.width !== 1920 || dims.height !== 1200) {
+            fail(`listing.json: screenshot ${screenshot} must be 1920×1200 PNG (got ${dims ? `${dims.width}×${dims.height}` : 'unreadable'})`);
+          } else if (size < PNG_MIN_BYTES) {
+            fail(`listing.json: screenshot ${screenshot} too small (${size} B) — replace 1×1 placeholder`);
+          } else {
+            ok(`listing.json: screenshot ${screenshot} ${dims.width}×${dims.height} (${size} B)`);
+          }
+        } else {
+          ok(`listing.json: screenshot exists (${screenshot})`);
+        }
+      }
+    }
+    ok('listing.json: listing metadata checked');
+  }
+}
+
+// 4. Plugin MCP is OAuth URL-only (Figma-style). G-A162 is empty Authorization, not the file.
+const shippedMcp = path.join(PLUGIN, 'mcp.json');
+if (!fs.existsSync(shippedMcp)) {
+  fail('plugins/agentstack/mcp.json missing — plugin panel MCP requires it');
+} else {
+  const mcpCfg = loadJson(shippedMcp);
+  const mcpErr = mcpCfg ? pluginMcpOAuthError(mcpCfg) : 'invalid JSON';
+  if (mcpErr) fail(`plugins/agentstack/mcp.json: ${mcpErr}`);
+  else ok('plugins/agentstack/mcp.json OAuth URL-only (no Authorization placeholder)');
+}
+const exampleMcpPath = path.join(ROOT, 'mcp.example.json');
+if (!fs.existsSync(exampleMcpPath)) {
+  fail('mcp.example.json missing at plugin repo root (docs template for ~/.cursor/mcp.json)');
+} else {
+  const example = loadJson(exampleMcpPath);
+  const cfg = example?.mcpServers?.agentstack;
+  if (!cfg) fail('mcp.example.json: missing mcpServers.agentstack');
+  else if (cfg.type !== 'streamable-http') fail(`mcp.example.json: type must be streamable-http (got: ${cfg.type})`);
+  else ok('mcp.example.json: lean streamable-http template');
+}
+
+// 5. Skills
+const skillsDir = path.join(PLUGIN, 'skills');
+if (fs.existsSync(skillsDir)) {
+  const dirs = fs.readdirSync(skillsDir, { withFileTypes: true }).filter((e) => e.isDirectory());
+  if (dirs.length === 0) fail('skills/: no sub-skills');
+  for (const d of dirs) {
+    const md = path.join(skillsDir, d.name, 'SKILL.md');
+    if (!fs.existsSync(md)) { fail(`skills/${d.name}: missing SKILL.md`); continue; }
+    const content = fs.readFileSync(md, 'utf8');
+    const fm = parseFrontmatter(content);
+    if (!fm) { fail(`skills/${d.name}/SKILL.md: missing frontmatter`); continue; }
+    if (!fm.name) fail(`skills/${d.name}/SKILL.md: frontmatter.name missing`);
+    if (!fm.description) fail(`skills/${d.name}/SKILL.md: frontmatter.description missing`);
+    else {
+      const wc = countWords(fm.description);
+      if (wc < MIN_TRIGGER_KEYWORDS) fail(`skills/${d.name}/SKILL.md: description has ${wc} trigger keywords (need >= ${MIN_TRIGGER_KEYWORDS})`);
+      else ok(`skills/${d.name}: ${wc} trigger keywords`);
+    }
+    const lines = content.split(/\r?\n/).length;
+    if (lines > 500) warn(`skills/${d.name}: ${lines} lines (Elegant Minimalism suggests <=500)`);
+  }
+}
+
+// 6. Rules (.mdc with frontmatter)
+const rulesDir = path.join(PLUGIN, 'rules');
+if (fs.existsSync(rulesDir)) {
+  const mdcs = fs.readdirSync(rulesDir).filter((f) => f.endsWith('.mdc'));
+  if (mdcs.length === 0) fail('rules/: no .mdc files');
+  for (const f of mdcs) {
+    const full = path.join(rulesDir, f);
+    const content = fs.readFileSync(full, 'utf8');
+    const fm = parseFrontmatter(content);
+    if (!fm) fail(`rules/${f}: missing frontmatter`);
+    else if (!fm.description) fail(`rules/${f}: frontmatter.description missing`);
+    else ok(`rules/${f}`);
+  }
+}
+
+// 6b. Router ↔ skills registry
+const backendSkillPath = path.join(PLUGIN, 'skills/agentstack-backend/SKILL.md');
+if (fs.existsSync(backendSkillPath)) {
+  const backendBody = fs.readFileSync(backendSkillPath, 'utf8');
+  for (const skill of ROUTER_SKILLS_REQUIRED) {
+    if (!backendBody.includes(`\`${skill}\``)) {
+      fail(`skills/agentstack-backend/SKILL.md: missing router row for ${skill}`);
+    }
+  }
+  ok('skills/agentstack-backend: router covers required skills');
+}
+if (fs.existsSync(path.join(PLUGIN, 'skills/agentstack-support-storage'))) {
+  fail('skills/agentstack-support-storage/: removed in gen3 — use hosting, support, storage');
+}
+
+// 6c. alwaysApply rule budget (T0)
+let alwaysApplyCount = 0;
+if (fs.existsSync(rulesDir)) {
+  for (const f of fs.readdirSync(rulesDir).filter((x) => x.endsWith('.mdc'))) {
+    const body = fs.readFileSync(path.join(rulesDir, f), 'utf8');
+    if (/alwaysApply:\s*true/i.test(body)) alwaysApplyCount += 1;
+  }
+  if (alwaysApplyCount > 2) fail(`rules/: ${alwaysApplyCount} alwaysApply rules (max 2 T0 recommended)`);
+  else ok(`rules/: ${alwaysApplyCount} alwaysApply rule(s)`);
+}
+
+// 7. Commands — frontmatter required
+const cmdDir = path.join(PLUGIN, 'commands');
+if (fs.existsSync(cmdDir)) {
+  const mds = fs.readdirSync(cmdDir).filter((f) => f.endsWith('.md'));
+  if (mds.length === 0) fail('commands/: no .md files');
+  for (const f of mds) {
+    const full = path.join(cmdDir, f);
+    const content = fs.readFileSync(full, 'utf8');
+    const fm = parseFrontmatter(content);
+    if (!fm) fail(`commands/${f}: missing frontmatter`);
+    else if (!fm.name || !fm.description) fail(`commands/${f}: frontmatter needs name + description`);
+    else ok(`commands/${f}`);
+  }
+}
+
+// 7b. agentstack-init step title (OAuth primary)
+const initPath = path.join(PLUGIN, 'commands/agentstack-init.md');
+if (fs.existsSync(initPath)) {
+  const initBody = fs.readFileSync(initPath, 'utf8');
+  if (/##\s*3\.\s*Persist scoped API key/i.test(initBody)) {
+    fail('commands/agentstack-init.md: rename step 3 to Persist tokens (OAuth primary)');
+  } else ok('commands/agentstack-init.md: step 3 title OK');
+}
+
+const authzPath = path.join(PLUGIN, 'commands/agentstack-authorize.md');
+if (!fs.existsSync(authzPath)) {
+  fail('commands/agentstack-authorize.md missing (Device Code auth control)');
+} else {
+  ok('commands/agentstack-authorize.md present');
+}
+
+// 8. Agents — frontmatter required
+const agentDir = path.join(PLUGIN, 'agents');
+if (fs.existsSync(agentDir)) {
+  const mds = fs.readdirSync(agentDir).filter((f) => f.endsWith('.md'));
+  if (mds.length === 0) warn('agents/: no .md files (optional layer, but recommended)');
+  for (const f of mds) {
+    const full = path.join(agentDir, f);
+    const content = fs.readFileSync(full, 'utf8');
+    const fm = parseFrontmatter(content);
+    if (!fm) fail(`agents/${f}: missing frontmatter`);
+    else if (!fm.name || !fm.description) fail(`agents/${f}: frontmatter needs name + description`);
+    else ok(`agents/${f}`);
+  }
+}
+
+// 9. hooks/hooks.json — all referenced scripts must exist
+const hooksPath = path.join(PLUGIN, 'hooks/hooks.json');
+if (fs.existsSync(hooksPath)) {
+  const hooks = loadJson(hooksPath);
+  if (hooks) {
+    if (!hooks.hooks || typeof hooks.hooks !== 'object') fail('hooks.json: missing "hooks" object');
+    else {
+      for (const [event, list] of Object.entries(hooks.hooks)) {
+        if (!Array.isArray(list)) { fail(`hooks.json: hooks.${event} must be an array`); continue; }
+        for (const entry of list) {
+          const cmd = entry.command || '';
+          const m = cmd.match(/node\s+\.\/(.+?\.mjs)/);
+          if (m) {
+            const script = path.join(PLUGIN, m[1]);
+            if (!fs.existsSync(script)) fail(`hooks.json: ${event} -> missing script ${m[1]}`);
+            else ok(`hooks.json: ${event} -> ${m[1]}`);
+          } else {
+            warn(`hooks.json: ${event} -> non-node command: ${cmd}`);
+          }
+        }
+      }
+    }
+  }
+}
+
+// 10. Consistency: CHANGELOG mentions the target version
+const chPath = path.join(ROOT, 'CHANGELOG.md');
+if (fs.existsSync(chPath)) {
+  const ch = fs.readFileSync(chPath, 'utf8');
+  if (ch.includes(`[${TARGET_VERSION}]`) || ch.includes(`## ${TARGET_VERSION}`)) ok(`CHANGELOG.md mentions ${TARGET_VERSION}`);
+  else warn(`CHANGELOG.md does not mention version ${TARGET_VERSION}`);
+}
+
+// 10b. Cross-file drift/security.
+checkTextSecurityAndDrift(LIVE_ACTIONS);
+
+// 11. Logo contract.
+// Canonical AgentStack mark (single <path>) — same geometry as the official
+// favicon served at https://agentstack.tech/favicon.svg — rendered transparent
+// (no rounded badge) and filling the full 512x512 canvas for the plugin.
+// See assets/ICON_DESIGN.md.
+// Enforced invariants:
+//   • no <line>, no <polyline>   (gen1 failure mode — strokes dropped by Cursor's PNG preview)
+//   • no VISIBLE strokes         (stroke="none" is allowed; stroke="#…"/any colour is not)
+//   • no background <rect>       (gen2 removed the rounded badge — logo is transparent)
+//   • viewBox 0 0 512 512        (square canvas)
+//   • mark transform fills the canvas: translate(0, 512) scale(0.2, -0.2)
+//   • ≥ 1 <path> element         (the AgentStack mark)
+//   • brand mark path string must match brand-mark.svg (drift detector)
+const LOGO_FILES = ['assets/logo.svg', 'assets/logo-dark.svg'];
+const BRAND_MARK_PATH = path.join(PLUGIN, 'assets/brand-mark.svg');
+
+function extractFirstPathD(svg) {
+  // Strip comments.
+  let body = svg.replace(/<!--[\s\S]*?-->/g, '');
+  // Strip decorative silhouette layers: <g ... aria-hidden="true"> ... </g>.
+  // These are gen2 silhouette backfills and contain a shortened `d` (outer
+  // subpath only). The canonical mark is in the *remaining* <g>.
+  body = body.replace(/<g\b[^>]*\baria-hidden\s*=\s*["']true["'][^>]*>[\s\S]*?<\/g>/g, '');
+  const m = body.match(/<path\b[^>]*\bd=(["'])([\s\S]*?)\1/);
+  return m ? m[2].replace(/\s+/g, ' ').trim() : null;
+}
+
+let brandMarkD = null;
+if (fs.existsSync(BRAND_MARK_PATH)) {
+  const svg = fs.readFileSync(BRAND_MARK_PATH, 'utf8');
+  brandMarkD = extractFirstPathD(svg);
+  if (!brandMarkD) fail('assets/brand-mark.svg: no <path d="..."> found');
+  else ok('assets/brand-mark.svg: canonical mark detected');
+} else {
+  fail('assets/brand-mark.svg missing (source of truth for the plugin logo)');
+}
+
+for (const rel of LOGO_FILES) {
+  const full = path.join(PLUGIN, rel);
+  if (!fs.existsSync(full)) continue; // REQUIRED_PLUGIN_FILES already flagged it
+  const svg = fs.readFileSync(full, 'utf8');
+  const body = svg.replace(/<!--[\s\S]*?-->/g, '');
+  let localOk = true;
+
+  if (!/<svg[^>]*viewBox=["']0 0 512 512["']/.test(body)) {
+    fail(`${rel}: viewBox must be "0 0 512 512"`); localOk = false;
+  }
+  if (/<line\b/.test(body) || /<polyline\b/.test(body)) {
+    fail(`${rel}: contains <line>/<polyline> (gen1 failure mode — use the canonical <path> mark)`); localOk = false;
+  }
+  // Allow stroke="none" (defensive no-op); reject any other stroke= value.
+  const strokeMatches = body.match(/\bstroke\s*=\s*["']([^"']*)["']/g) || [];
+  for (const m of strokeMatches) {
+    if (!/["']\s*none\s*["']/.test(m)) {
+      fail(`${rel}: visible stroke attribute not allowed — ${m}`); localOk = false;
+    }
+  }
+  if (/<rect\b/.test(body)) {
+    fail(`${rel}: <rect> element not allowed — logo is transparent (no rounded badge); see assets/ICON_DESIGN.md`); localOk = false;
+  }
+  if (!/<path\b/.test(body)) {
+    fail(`${rel}: missing <path> (canonical AgentStack mark)`); localOk = false;
+  }
+  if (!/transform\s*=\s*["']translate\(0,\s*512\)\s*scale\(0\.2,\s*-0\.2\)["']/.test(body)) {
+    fail(`${rel}: mark transform must fill the canvas — expected translate(0, 512) scale(0.2, -0.2)`); localOk = false;
+  }
+
+  if (brandMarkD) {
+    const d = extractFirstPathD(svg);
+    if (!d) {
+      fail(`${rel}: could not extract <path d="...">`); localOk = false;
+    } else if (d !== brandMarkD) {
+      fail(`${rel}: <path d="..."> differs from assets/brand-mark.svg — resync the brand mark`);
+      localOk = false;
+    }
+  }
+
+  if (localOk) ok(`${rel}: canonical AgentStack mark fills 512×512 canvas (no badge)`);
+}
+
+console.log('');
+if (hasErrors) {
+  console.error('Validation FAILED. Fix the issues above and run again.');
+  process.exit(1);
+}
+
+const proseGate = path.join(REPO_ROOT, 'scripts/audit-plugin-prose-leaks.mjs');
+if (fs.existsSync(proseGate)) {
+  const r = spawnSync(process.execPath, [proseGate], {
+    cwd: REPO_ROOT,
+    stdio: 'inherit',
+  });
+  if (r.status !== 0) {
+    console.error('Validation FAILED: audit-plugin-prose-leaks');
+    process.exit(r.status ?? 1);
+  }
+}
+
+console.log('All checks passed.');
+process.exit(0);

@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      { "command": "node ./hooks/scripts/session-start.mjs --from-hook" }
+    ],
+    "sessionEnd": [
+      { "command": "node ./hooks/scripts/session-end.mjs" }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "node ./hooks/scripts/pre-shell-scan.mjs",
+        "matcher": "curl|wget|http|fetch|axios|Invoke-WebRequest|Invoke-RestMethod"
+      }
+    ],
+    "beforeMCPExecution": [
+      { "command": "node ./hooks/scripts/pre-mcp-cap-check.mjs" }
+    ],
+    "postToolUse": [
+      { "command": "node ./hooks/scripts/post-tool-telemetry.mjs" }
+    ],
+    "postToolUseFailure": [
+      { "command": "node ./hooks/scripts/post-tool-failure.mjs" }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "node ./hooks/scripts/capability-refresh.mjs",
+        "matcher": "mcp\\.json$"
+      },
+      {
+        "command": "node ./hooks/scripts/pre-nav-index-edit.mjs",
+        "matcher": "AI_NAVIGATION_MAP\\.md|AI_INDEX\\.md"
+      }
+    ]
+  },
+  "_comment_layout": "Scripts live under hooks/scripts/ (intentional vs Cursor template root scripts/). Cwd must be plugin root."
+}

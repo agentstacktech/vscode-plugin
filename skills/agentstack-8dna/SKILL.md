@@ -7,7 +7,7 @@ description: Applies AgentStack 8DNA (JSON+): structured JSON data model with bu
 
 **8DNA is AgentStack's data model (JSON+):** structured JSON storage with built-in support for organizing data and running variants (e.g. A/B tests). Business data and config live in `data` (and `data.config`); secrets live in `protected`.
 
-**Data store (the "database"):** Each project and each user has a JSON document. Read/write via the **key-value API** (GET/POST `/data` with keys `project.data.<path>`, `user.data.<path>`) or via **project API** (`projects.get_project` returns project including `data`; `projects.update_project` accepts `data`). See repo **docs/architecture/DNA_KEY_VALUE_API.md**.
+**Data store (the "database"):** Each project and each user has a JSON document. Nested leaves: MCP `projects.patch_data` / `projects.get_data` with `write_mode` (REST `PATCH /api/projects/{id}/data`). `projects.update_project` is name/settings only. Key-value `GET/POST /api/dna/data` is the same leaf SET. See repo **docs/architecture/DNA_KEY_VALUE_API.md**.
 
 **What you can do with JSON+:** Store all business data and public config in `data` (with optional `data.config`); keep secrets in `protected`; use dot-notation keys for consistent access; use built-in support for variants (e.g. A/B tests). APIs and MCP operate on this same structure.
 
@@ -27,13 +27,13 @@ description: Applies AgentStack 8DNA (JSON+): structured JSON data model with bu
 
 1. Store business data and config in `data` (and `data.config`); never put secrets in `data` — use `protected` and documented key paths.
 2. Use dot-notation keys in `data` and `config` for consistency.
-3. For "where is the database?" or "how do I read/write?": use key-value API (GET/POST `/data`, keys `project.data.*`, `user.data.*`) or `projects.get_project` / `projects.update_project`.
+3. For "where is the database?" or "how do I read/write?": use `projects.patch_data` / `projects.get_data` (`write_mode` replace|merge|delete) or REST `PATCH /projects/{id}/data`. `projects.update_project` is name/settings only.
 4. For A/B tests or variants: JSON+ has built-in support; refer the user to repo docs for details.
 
 ## Examples
 
-- **"Where is data stored?"** → Project and user each have a JSON document (`project.data`, `user.data`). Read/write via key-value API (GET/POST `/data`) or `projects.get_project` / `projects.update_project`. See DNA_KEY_VALUE_API in repo.
-- **"Store project config"** → Use `project.data.config.<path>` via key-value API or `projects.update_project` with `data`.
+- **"Where is data stored?"** → Project and user each have a JSON document (`project.data`, `user.data`). Nested leaves: `projects.patch_data` (`write_mode`). See DNA_KEY_VALUE_API in repo.
+- **"Store project config"** → Use `projects.patch_data` with path `config.<path>` and `write_mode=merge` or `replace`.
 - **"A/B tests or experiments?"** → JSON+ supports variants (e.g. A/B); for implementation details see repo docs.
 
 ## References

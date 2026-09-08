@@ -1,0 +1,30 @@
+name: Validate plugin
+
+# Transient "Failed to resolve action download info / Service Unavailable" is a
+# GitHub Actions marketplace outage — re-run via Actions → Re-run, or workflow_dispatch.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Verify Node (runner image)
+        run: |
+          node --version
+          node scripts/ci-validate.mjs

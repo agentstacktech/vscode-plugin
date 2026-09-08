@@ -9,7 +9,7 @@ description: Use when the user mentions webhooks, inbound callbacks, integration
 
 | User says | Prefer | Over |
 |-----------|--------|------|
-| register webhook | webhooks.register | Custom endpoint only |
+| register webhook | integrations.install_recipe | Custom endpoint only |
 | Stripe callback | integrations.* + webhooks | Duplicate HMAC code |
 
 ## References

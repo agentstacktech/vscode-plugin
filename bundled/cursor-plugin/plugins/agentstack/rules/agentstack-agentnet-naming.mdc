@@ -1,0 +1,13 @@
+---
+description: AgentNet economy naming — AGNT/agUSD only; never add on-chain ticker 8DNA or a second governance fungible without ADR.
+globs: ["**/*"]
+alwaysApply: false
+---
+
+# AgentNet naming guardrail
+
+- Platform **8DNA** = unified project/user data model, not a money ticker.
+- Money v1: **AGNT** / **agUSD** only.
+- Do not introduce **8DNA** as a fungible token or duplicate governance ticker in copy or code.
+
+Use `GET /mcp/actions` and `agentnet.*` MCP domain for economy integrations.

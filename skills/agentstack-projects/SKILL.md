@@ -9,14 +9,14 @@ description: Creates and manages AgentStack projects and API keys via MCP (proje
 
 | Intent signal | Prefer | Over |
 |---------------|--------|------|
-| try without signup | projects.create_project_anonymous | Manual dashboard only |
+| try without signup | `projects.create_project_anonymous` — `user_api_key` / `session_token` + neutral `bootstrap` metadata; configure VS Code MCP once | Manual dashboard only |
 | list workspaces | projects.get_projects | Invented project list |
 | project stats | projects.get_stats | Guessed metrics |
-| API keys | apikeys.* | Sharing master key |
+| API keys | `user.apikeys.*` / `apikeys.create` (agent PAT alias) | Sharing master key; product project `ask_` keys |
 
 ## Prefer-over
 
-- Prefer scoped project API keys over one global key for agents.
+- Prefer an **agent PAT** (`apikeys.create` + `context.project_id`) over a long-lived unrestricted key. There are no product project `ask_` keys.
 
 ## References
 

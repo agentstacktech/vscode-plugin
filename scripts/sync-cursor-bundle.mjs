@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const SRC = path.resolve(ROOT, '../../cursor-plugin');
+const SRC = path.resolve(ROOT, '../cursor-plugin');
 const DEST = path.join(ROOT, 'bundled', 'cursor-plugin');
 
 function copyRecursive(src, dest) {

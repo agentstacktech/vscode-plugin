@@ -1,0 +1,33 @@
+---
+description: 8DNA data/protected structure, unified table (v0.4.7+), genetic key conventions
+globs: ["**/*.py", "**/*.ts", "**/*.tsx", "**/*.sql", "**/dna/**"]
+---
+
+# AgentStack 8DNA patterns
+
+## Sections
+
+- `data.*` — public or business data (readable by frontend if RBAC/FAP allow).
+- `data.config.*` — runtime-tunable configuration (shown in admin UI).
+- `protected.*` — secrets (API keys of 3rd parties, signing keys). NEVER returned in `projects.get_project`; accessed server-side via `ProtectedManager`.
+- `sandbox.*` — A/B / experiments, linked by `parent_uuid` to the main row.
+
+## Unified storage (v0.4.7+)
+
+- AgentStack stores project and user data in a **unified 8DNA JSON document** per scope.
+  - Project scope: `project.data.*`, `project.protected.*`
+  - User scope: `user.data.*`, `user.protected.*`
+- Access via MCP `projects.patch_data` / `projects.get_data` (`write_mode` replace|merge|delete) or REST `PATCH /api/projects/{id}/data`. `projects.update_project` is name/settings only. `POST /api/dna/data` with dotted keys is the same leaf SET.
+
+## Dot-notation keys (genetic-style)
+
+- Prefer deep semantic paths: `config.webhooks.timeout_ms`, `limits.api_calls.daily`, `features.ab.homepage_v2`.
+- Never dump everything into a flat top-level — agents reason about structure, not keys.
+- Use `parent_uuid` + `generation` for versioned rows and A/B forks.
+- Full decision matrix (when 8DNA vs Storage vs FAP vs Logic): `./../skills/agentstack-data/SKILL.md`.
+
+## Never
+
+- **NEVER** store real secrets in `data.*` — they will be returned by read actions.
+- **NEVER** introduce a parallel Prisma/Drizzle schema for data that belongs in 8DNA.
+- **NEVER** bypass RBAC by writing directly to the storage layer — go through MCP `projects.patch_data` or `/api/projects/{id}/data`.

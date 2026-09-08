@@ -4,6 +4,8 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { getBaseUrl } from "../auth";
 import { fetchWithTimeout } from "../infra/fetchWithTimeout";
+import { flattenMcpActionsCatalog } from "./mcpCatalogFlatten";
+import { filterTenantActions } from "./tenantActionFilter";
 
 const CACHE_KEY = "agentstack.capabilityActionNames";
 const CACHE_TS_KEY = "agentstack.capabilityCacheTs";
@@ -23,10 +25,8 @@ export class CapabilityCatalogService {
     try {
       const res = await fetchWithTimeout(`${base}/mcp/actions`, { method: "GET" }, 30_000);
       if (!res.ok) return new Set(cached ?? []);
-      const json = (await res.json()) as { actions?: Array<{ name?: string }> };
-      const names = (json.actions ?? [])
-        .map((a) => a.name)
-        .filter((n): n is string => typeof n === "string");
+      const json = (await res.json()) as unknown;
+      const names = filterTenantActions(flattenMcpActionsCatalog(json)).map((a) => a.action);
       await this.context.globalState.update(CACHE_KEY, names);
       await this.context.globalState.update(CACHE_TS_KEY, now);
       await this.writeLocalSnapshot(names);
@@ -42,7 +42,7 @@ export class CapabilityCatalogService {
     return names.has(action);
   }
 
-  /** Mirror Cursor catalog plane: ~/.vscode/agentstack-capabilities.json */
+  /** Mirror Cursor catalog plane: ~/.vscode/agentstack-capabilities.json (tenant actions only). */
   private async writeLocalSnapshot(actionNames: string[]): Promise<void> {
     try {
       const dir = path.join(os.homedir(), ".vscode");
@@ -50,8 +50,17 @@ export class CapabilityCatalogService {
       const file = path.join(dir, "agentstack-capabilities.json");
       await fs.promises.writeFile(
         file,
-        JSON.stringify({ updated_at: new Date().toISOString(), actions: actionNames }, null, 2),
-        "utf8"
+        JSON.stringify(
+          {
+            updated_at: new Date().toISOString(),
+            audience: "tenant",
+            total_actions: actionNames.length,
+            actions: actionNames,
+          },
+          null,
+          2,
+        ),
+        "utf8",
       );
     } catch {
       // Best-effort cache for agents; ignore FS errors
