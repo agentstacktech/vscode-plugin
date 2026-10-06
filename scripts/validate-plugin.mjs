@@ -75,6 +75,26 @@ if (fs.existsSync(extTs)) {
   else ok(`extension.ts ${loc} LOC`);
 }
 
+const kernel = path.join(ROOT, 'lib/plugin-kernel/deviceCodeClient.mjs');
+if (!fs.existsSync(kernel)) {
+  fail('missing vendored lib/plugin-kernel/deviceCodeClient.mjs — run sync-plugin-kernel.mjs');
+} else ok('vendored plugin-kernel');
+
+const oauthSrc = path.join(ROOT, 'src/oauthDeviceCode.ts');
+if (fs.existsSync(oauthSrc)) {
+  const oauth = fs.readFileSync(oauthSrc, 'utf8');
+  if (oauth.includes('shared/plugin-kernel')) {
+    fail('oauthDeviceCode.ts must load lib/plugin-kernel, not monorepo shared/');
+  }
+}
+const authHeaders = path.join(ROOT, 'scripts/lib/agentstackAuthHeaders.mjs');
+if (fs.existsSync(authHeaders)) {
+  const headers = fs.readFileSync(authHeaders, 'utf8');
+  if (headers.includes('shared/plugin-kernel')) {
+    fail('agentstackAuthHeaders.mjs must import lib/plugin-kernel, not monorepo shared/');
+  }
+}
+
 const outMain = path.join(ROOT, 'out/extension.js');
 if (!fs.existsSync(outMain)) warn('out/extension.js missing — run npm run compile');
 else ok('out/extension.js present');

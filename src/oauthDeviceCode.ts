@@ -24,9 +24,9 @@ interface TokenResponse {
 }
 
 const nodeRequire = createRequire(__filename);
-// Shared RFC 8628 poll kernel (provided_plugins/shared/plugin-kernel)
+// Vendored RFC 8628 poll kernel (vscode-plugin/lib/plugin-kernel). Works from src/ and out/.
 const kernel = nodeRequire(
-  nodePath.join(__dirname, "../../shared/plugin-kernel/deviceCodeClient.mjs")
+  nodePath.join(__dirname, "../lib/plugin-kernel/deviceCodeClient.mjs")
 ) as {
   pollDeviceToken: (opts: Record<string, unknown>) => Promise<TokenResponse>;
   postForm: <T>(url: string, params: Record<string, string>, traceId: string) => Promise<T>;
@@ -50,6 +50,7 @@ const DEFAULT_SCOPE = [
   "storage:read",
   "storage:write",
   "agents:run",
+  "agents:admin",
   "bots:run",
   "bots:admin",
   "buffs:read",
