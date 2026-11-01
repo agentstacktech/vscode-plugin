@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "agentstack": {
+      "type": "http",
+      "url": "https://agentstack.tech/mcp"
+    }
+  }
+}

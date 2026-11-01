@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Native VS Code MCP template `templates/vscode-mcp.json`: `type: http` and `https://agentstack.tech/mcp`. The extension default remains that same remote URL.
+
 ## [0.4.56] — 2026-09-08
 
 ### Changed

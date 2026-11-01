@@ -10,7 +10,7 @@ JSON-based data store (8DNA: JSON+ with built-in variants, e.g. A/B tests) and s
 
 1. **Install the extension** from the Marketplace or load the VSIX.
 2. **Sign in** — run **AgentStack: Sign in with Device Code** for OAuth browser login. If OAuth is unavailable, run **AgentStack: Create project and get API key** or **AgentStack: Set API Key** as the fallback.
-3. **Use in chat** — select **@agentstack** for read-only fast paths (list projects, stats) and LM tools (`agentstack_execute`, `agentstack_get_projects` when supported). For full catalog coverage use manual MCP setup in [MCP_QUICKSTART.md](MCP_QUICKSTART.md) or Copilot agent mode with MCP configured.
+3. **Use in chat** — select **@agentstack**. There is 1 MCP tool (`agentstack.execute`). Bound project: `agents.work_next` before catalog search. The extension calls `https://agentstack.tech/mcp`. For Copilot's native MCP client, use `templates/vscode-mcp.json` (`type: http`). See [MCP_QUICKSTART.md](MCP_QUICKSTART.md).
 
 More options (curl, dashboard) in [MCP_QUICKSTART.md](MCP_QUICKSTART.md).
 
